@@ -163,6 +163,41 @@ function parseInlineList(value: string): string[] {
 }
 
 /**
+ * A short, single-line window onto the text around a link — what the backlinks
+ * panel shows under each source note, and what the MCP server returns for the
+ * same link. Shared so the two never describe one link differently.
+ */
+export function excerptAround(
+  content: string,
+  from: number,
+  to: number,
+  radius = 60,
+): string {
+  const start = Math.max(0, from - radius)
+  const end = Math.min(content.length, to + radius)
+  const text = content.slice(start, end).replace(/\s+/g, ' ').trim()
+  return `${start > 0 ? '…' : ''}${text}${end < content.length ? '…' : ''}`
+}
+
+/**
+ * The links table has a unique (source, target_title, link_type), so a target
+ * mentioned twice in one note must only be written once. Both writers — the
+ * app's save path and the MCP server's — dedupe through this, since both hand
+ * the same array to the same SQL function.
+ */
+export function dedupeLinks(links: ExtractedLink[]): { target: string; type: LinkType }[] {
+  const seen = new Set<string>()
+  const deduped: { target: string; type: LinkType }[] = []
+  for (const link of links) {
+    const key = `${link.type}:${link.target}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    deduped.push({ target: link.target, type: link.type })
+  }
+  return deduped
+}
+
+/**
  * Every tag on a note: inline `#tags` from the body plus whatever the
  * frontmatter `tags:` key holds, deduplicated.
  */

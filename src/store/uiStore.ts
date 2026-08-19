@@ -43,13 +43,15 @@ type UiState = {
   rightWidth: number
   /** null means "follow the OS preference". */
   theme: Theme | null
+  settingsOpen: boolean
   setLeftTab: (tab: LeftTab) => void
   setRightTab: (tab: RightTab) => void
   toggleLeft: () => void
   toggleRight: () => void
   setLeftWidth: (width: number) => void
   setRightWidth: (width: number) => void
-  toggleTheme: () => void
+  setTheme: (theme: Theme | null) => void
+  setSettingsOpen: (open: boolean) => void
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -60,6 +62,7 @@ export const useUiStore = create<UiState>((set) => ({
   leftWidth: storedWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT_WIDTH),
   rightWidth: storedWidth(RIGHT_WIDTH_KEY, DEFAULT_RIGHT_WIDTH),
   theme: storedTheme(),
+  settingsOpen: false,
 
   // Selecting a tab also reveals the sidebar if it was collapsed, so the ribbon
   // buttons always do something visible.
@@ -80,15 +83,13 @@ export const useUiStore = create<UiState>((set) => ({
     set({ rightWidth })
   },
 
-  toggleTheme: () =>
-    set((s) => {
-      const resolved =
-        s.theme ??
-        (window.matchMedia('(prefers-color-scheme: light)').matches
-          ? 'light'
-          : 'dark')
-      const theme: Theme = resolved === 'dark' ? 'light' : 'dark'
-      localStorage.setItem(THEME_KEY, theme)
-      return { theme }
-    }),
+  // null is a real choice — "follow the OS" — so it clears the stored value
+  // rather than writing one, and App removes the data-theme attribute.
+  setTheme: (theme) => {
+    if (theme) localStorage.setItem(THEME_KEY, theme)
+    else localStorage.removeItem(THEME_KEY)
+    set({ theme })
+  },
+
+  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
 }))

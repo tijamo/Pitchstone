@@ -1,14 +1,14 @@
 {
   "name": "pitchstone",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc -b --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --experimental-strip-types --test \"src/**/*.test.ts\""
+    "test": "tsc -p tsconfig.test.json && node --experimental-strip-types --test \"src/**/*.test.ts\" \"netlify/**/*.test.ts\""
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

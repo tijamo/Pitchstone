@@ -15,6 +15,16 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
+# The MCP server. netlify/functions/mcp.mts declares `config.path = "/mcp"`,
+# which already registers the route ahead of redirects; this rule is here so
+# that the endpoint does not depend on that one mechanism, and because it must
+# in any case be matched before the SPA fallback below.
+[[redirects]]
+  from = "/mcp"
+  to = "/.netlify/functions/mcp"
+  status = 200
+  force = true
+
 # SPA fallback: every non-asset route is served by the app shell. Files that
 # exist on disk — sw.js and manifest.webmanifest among them — are served
 # before redirects are considered, so this does not shadow them.

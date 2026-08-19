@@ -13,5 +13,5 @@
     // a real .ts extension — unlike the app's, which Vite resolves.
     "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.test.ts"]
+  "include": ["src/**/*.test.ts", "netlify/**/*.test.ts"]
 }

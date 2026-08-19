@@ -11,6 +11,17 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.6',
+    title: 'Claude can use your vault',
+    items: [
+      'Pitchstone now has its own MCP server, so Claude can read, search, and write your notes — the vault becomes a memory that carries between conversations instead of dying with each one.',
+      'Settings → Claude access creates a token and hands you the exact command to connect. The token is shown once and stored only as a hash; lose it and you make another.',
+      'Nine tools: read, write, append, search, list, rename, delete, backlinks, and tags. Notes Claude writes get their [[wikilinks]] and #tags read exactly as if you had typed them.',
+      'A settings dialog, opened from the cog in the ribbon — where the theme now lives too, with a System option that follows your OS rather than only flipping between the two.',
+      'Revoke a token at any time and whatever was using it stops immediately.',
+    ],
+  },
+  {
     ver: '0.5',
     title: 'Install it',
     items: [

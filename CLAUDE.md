@@ -4,10 +4,11 @@ A light Obsidian clone, started 2026-08-19. Versioning, git, and deployment
 rules are carried over deliberately from Dodo (`tijamo/Dodo`), so switching
 between the two projects doesn't mean switching habits.
 
-**Current state: v0.5.0.** The app is real and deployed — auth, a Supabase
+**Current state: v0.6.0.** The app is real and deployed — auth, a Supabase
 vault, a three-pane shell, a CodeMirror editor with live-preview wikilinks,
-backlinks, a force-directed graph, tags, full-text search, and an installable
-PWA. See "Where the build has got to" below for what each phase covered.
+backlinks, a force-directed graph, tags, full-text search, an installable PWA,
+and an MCP server so Claude can use the vault as its memory. See "Where the
+build has got to" below for what each phase covered.
 
 ## Versioning
 
@@ -114,7 +115,13 @@ can read and write the same vault.
   `auth.uid() = user_id`, sharing the existing auth users.
 - **MCP:** a Netlify Function at `/mcp` speaking Streamable HTTP, authenticated
   by a personal token hashed into `pitchstone_api_tokens`. Hosting the vault
-  remotely is what makes this possible at all.
+  remotely is what makes this possible at all. **There is no service-role key.**
+  The function holds only the public anon key, and the one thing that key can
+  reach without a signed-in session is the `pitchstone_mcp_*` surface: security
+  definer functions that each take the raw token first and derive the user id
+  from it, so a user id is never something a caller supplies. That is why every
+  MCP operation is its own SQL function rather than a query in TypeScript — the
+  narrow door is the security model.
 - **Link handling** deliberately splits in two so the app and the MCP server can
   never drift: *extraction* of `[[wikilinks]]` and `#tags` lives in one shared
   TypeScript module imported by both, while *resolution* (title →
@@ -145,11 +152,12 @@ minor bump.
 | 0.3 | CodeMirror editor: live-preview wikilinks, `[[` completion, outline. |
 | 0.4 | Phase 3 — backlinks, graph, tags, search. Then resizable panels, the graph moved to the right sidebar, and the index backfill. |
 | 0.5 | Installable PWA and the Pitchstone mark. |
+| 0.6 | Phase 6 — the MCP server at `/mcp`, personal tokens, and a settings dialog. |
 
-Phase 3 was backlinks, graph, tags, and search, and shipped as 0.4.0 — that
-much is known because Tim confirmed it directly. Which phase numbers 0.1–0.3
-correspond to was never recorded, and phases 4 and 5 are unknown here. The MCP
-server is Phase 6. Ask rather than guessing the mapping.
+Phase 3 was backlinks, graph, tags, and search, and shipped as 0.4.0; Phase 6
+was the MCP server and shipped as 0.6.0 — both known because Tim said so
+directly. Which phase numbers 0.1–0.3 correspond to was never recorded, and
+phases 4 and 5 are still unknown here. Ask rather than guessing the mapping.
 
 ## What's in the repo
 
@@ -166,6 +174,14 @@ server is Phase 6. Ask rather than guessing the mapping.
 - `.env.example` — the two `VITE_` keys. Copy to `.env.local` to run locally.
 - `netlify.toml` — build command, publish dir, functions dir, SPA fallback, and
   a no-cache header on `/sw.js`.
+- `netlify/functions/mcp.mts` — the `/mcp` route and nothing else. It declares
+  its own `config.path`, which registers the route *ahead* of the SPA fallback;
+  without that, `netlify.toml`'s `/*` rule would answer `/mcp` with the app.
+- `netlify/lib/mcp/` — the server proper, out of the functions directory so
+  Netlify does not treat each file as another function and so the tests can
+  import it: `server.ts` (JSON-RPC and the HTTP transport), `tools.ts` (the
+  nine tools and what they say back), `vault.ts` (the RPC calls), and
+  `server.test.ts`.
 - `vite.config.ts` — exposes `package.json`'s version to the bundle as
   `__APP_VERSION__`, which the status bar renders, and configures
   `vite-plugin-pwa` (manifest, icons, precache).
@@ -183,10 +199,12 @@ server is Phase 6. Ask rather than guessing the mapping.
   `vaultStore` (notes, the open note, autosave, `linksVersion`).
 - `src/components/` — the shell (`Ribbon`, `LeftSidebar`, `RightSidebar`,
   `EditorPane`, `StatusBar`, `LoginGate`), the panels (`FileTree`,
-  `SearchPanel`, `TagsPanel`, `GraphView`), `Resizer`, `Icon`, and `Mark`.
+  `SearchPanel`, `TagsPanel`, `GraphView`), `SettingsModal`, `Resizer`, `Icon`,
+  and `Mark`.
 - `src/lib/` — the Supabase client, vault path helpers (`paths.ts`), the note
-  data access layer (`notes.ts`), and `markdown/parse.ts`, the shared
-  extraction module (see Architecture) with its unit tests beside it.
+  data access layer (`notes.ts`), personal tokens (`tokens.ts`), and
+  `markdown/parse.ts`, the shared extraction module (see Architecture) with its
+  unit tests beside it.
 - `src/components/editor/` — the CodeMirror 6 editor: the wikilink syntax
   extension, the live-preview decorations, the theme, and `[[` completion.
 - `supabase/migrations/` — the applied schema, kept in the repo for the record.
@@ -194,7 +212,8 @@ server is Phase 6. Ask rather than guessing the mapping.
   file here is a record of a change already made — writing one does not apply
   it.
 - `tsconfig.*.json` — `app` for the build graph, `node` for Vite's config,
-  `test` for the unit tests (deliberately outside the app's graph).
+  `netlify` for the function, `test` for the unit tests (deliberately outside
+  the app's graph).
 - `.gitattributes` — LF normalization.
 
 ## Gotchas
@@ -244,6 +263,27 @@ server is Phase 6. Ask rather than guessing the mapping.
   the app opens offline but the vault does not load. That is deliberate:
   serving yesterday's notes, and accepting edits that cannot be saved, would be
   worse than saying plainly that there is no connection.
+- **The MCP server's SQL is the only thing standing between the anon key and
+  every vault.** Adding an operation means adding a `pitchstone_mcp_*` function
+  that takes `p_token` first and calls `pitchstone_token_user`; never a plain
+  table read, and never a uid parameter. And note that this Supabase project's
+  *default privileges* grant execute on every new function in `public` to
+  `anon` and `authenticated` — so `revoke ... from public` alone leaves the
+  grant standing. Revoke from all three by name, and check with
+  `has_function_privilege` afterwards rather than assuming.
+- **Netlify treats every file in `netlify/functions/` as a function**, which is
+  why the MCP server lives in `netlify/lib/mcp/` with only a route file in
+  `functions/`. Its imports carry real `.ts` extensions, because Node's type
+  stripping runs those same files for the tests and resolves ESM specifiers
+  literally — hence `allowImportingTsExtensions` in `tsconfig.netlify.json`.
+  For the same reason nothing there may use a TypeScript feature that is more
+  than type erasure: a constructor parameter property will type-check and then
+  fail at test time.
+- **A note written over MCP is parsed by the same TypeScript the editor uses.**
+  `netlify/lib/mcp/vault.ts` calls `collectTags`/`extractLinks`/
+  `parseFrontmatter` before the write, exactly as `saveContent` does. If a note
+  ever arrives in the vault with no tags, suspect a write path that skipped
+  that step rather than the parser.
 - **`@codemirror/lang-markdown` drags in the HTML, JavaScript, and CSS modes**,
   which is larger than the rest of the app put together. The editor is therefore
   lazy-loaded, and `components/editor/editorHandle.ts` deliberately imports
@@ -252,12 +292,12 @@ server is Phase 6. Ask rather than guessing the mapping.
 
 ## Not yet set up
 
-- **`SUPABASE_SERVICE_ROLE_KEY`** in Netlify — secret, server-side only, needed
-  from Phase 6 for the MCP function.
 - **Component and end-to-end tests.** `npm test` covers `lib/markdown/parse.ts`
-  only, through Node's built-in runner and type stripping (`tsconfig.test.json`
-  type-checks it separately — it is deliberately outside the app's build graph).
-  Everything else is verified by driving the app per the `verify` skill.
+  and the MCP server's protocol layer (`netlify/lib/mcp/server.test.ts`, which
+  stubs Supabase at the `fetch` boundary), through Node's built-in runner and
+  type stripping — `tsconfig.test.json` type-checks both separately, outside
+  the app's build graph. Everything else is verified by driving the app per the
+  `verify` skill.
 - **No git tags and no GitHub releases.** Versions live in `package.json` and
   commit messages only, so the `version-release` skill's tag-counting maths
   doesn't apply here — count pushes since the last minor by reading the log.
@@ -272,3 +312,9 @@ Worth knowing so they don't get "fixed" by accident:
 - **Empty folders.** They cannot exist — see the gotcha above.
 - **Unlinked mentions**, clickable `#tags` inside the editor, and search over
   tags. All plausible, none built, none promised.
+- **MCP resources and prompts.** The server advertises tools only. A note is
+  more usefully reached through `read_note`, which resolves a title as readily
+  as a path, than pinned as a resource a client has to enumerate first.
+- **MCP sessions and SSE.** `/mcp` answers a POST with one JSON response and
+  refuses GET. A serverless function cannot honourably hold a stream open, and
+  Streamable HTTP explicitly permits this shape.

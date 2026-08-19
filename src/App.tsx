@@ -5,6 +5,7 @@ import { EditorPane } from './components/EditorPane'
 import { RightSidebar } from './components/RightSidebar'
 import { StatusBar } from './components/StatusBar'
 import { LoginGate } from './components/LoginGate'
+import { SettingsModal } from './components/SettingsModal'
 import { useUiStore } from './store/uiStore'
 import { useAuthStore } from './store/authStore'
 import { useVaultStore } from './store/vaultStore'
@@ -59,6 +60,7 @@ function Vault() {
       <EditorPane />
       <RightSidebar />
       <StatusBar />
+      <SettingsModal />
       {error && (
         <div className="toast" role="alert">
           <span>{error}</span>

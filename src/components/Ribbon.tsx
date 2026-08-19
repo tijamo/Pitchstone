@@ -16,7 +16,7 @@ export function Ribbon() {
   const rightOpen = useUiStore((s) => s.rightOpen)
   const setLeftTab = useUiStore((s) => s.setLeftTab)
   const setRightTab = useUiStore((s) => s.setRightTab)
-  const toggleTheme = useUiStore((s) => s.toggleTheme)
+  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen)
   const create = useVaultStore((s) => s.create)
   const signOut = useAuthStore((s) => s.signOut)
 
@@ -64,9 +64,9 @@ export function Ribbon() {
 
       <button
         className="icon-button"
-        title="Toggle theme"
-        aria-label="Toggle theme"
-        onClick={toggleTheme}
+        title="Settings"
+        aria-label="Settings"
+        onClick={() => setSettingsOpen(true)}
       >
         <Icon name="settings" />
       </button>

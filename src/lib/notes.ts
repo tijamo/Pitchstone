@@ -1,5 +1,11 @@
 import { db } from './supabase'
-import { collectTags, extractLinks, parseFrontmatter, type ExtractedLink } from './markdown/parse'
+import {
+  collectTags,
+  dedupeLinks,
+  excerptAround,
+  extractLinks,
+  parseFrontmatter,
+} from './markdown/parse'
 
 /**
  * Data access for the vault. Every query is scoped by RLS to the signed-in
@@ -71,20 +77,6 @@ export async function saveContent(id: string, content: string): Promise<NoteMeta
   return data as NoteMeta
 }
 
-/** The links table has a unique (source, target_title, link_type) — a target
- * mentioned twice in one note must only be written once. */
-function dedupeLinks(links: ExtractedLink[]): { target: string; type: string }[] {
-  const seen = new Set<string>()
-  const deduped: { target: string; type: string }[] = []
-  for (const link of links) {
-    const key = `${link.type}:${link.target}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    deduped.push({ target: link.target, type: link.type })
-  }
-  return deduped
-}
-
 export async function renameNote(id: string, path: string): Promise<NoteMeta> {
   const { data, error } = await db()
     .from('pitchstone_notes')
@@ -144,15 +136,8 @@ export async function fetchBacklinks(noteId: string, noteTitle: string): Promise
   return (sources ?? []).map((source) => {
     const { content, ...meta } = source as Note
     const match = extractLinks(content).find((l) => l.target.toLowerCase() === wanted)
-    return { note: meta, snippet: match ? excerpt(content, match.from, match.to) : null }
+    return { note: meta, snippet: match ? excerptAround(content, match.from, match.to) : null }
   })
-}
-
-function excerpt(content: string, from: number, to: number, radius = 60): string {
-  const start = Math.max(0, from - radius)
-  const end = Math.min(content.length, to + radius)
-  const text = content.slice(start, end).replace(/\s+/g, ' ').trim()
-  return `${start > 0 ? '…' : ''}${text}${end < content.length ? '…' : ''}`
 }
 
 export type LinkEdge = {
