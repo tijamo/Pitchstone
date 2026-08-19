@@ -3,19 +3,19 @@ import { useVaultStore } from '../store/vaultStore'
 import { FileTree } from './FileTree'
 import { SearchPanel } from './SearchPanel'
 import { TagsPanel } from './TagsPanel'
-import { GraphView } from './GraphView'
+import { Resizer } from './Resizer'
 import { Icon } from './Icon'
 
 const TABS: { tab: LeftTab; label: string }[] = [
   { tab: 'files', label: 'Files' },
   { tab: 'search', label: 'Search' },
   { tab: 'tags', label: 'Tags' },
-  { tab: 'graph', label: 'Graph' },
 ]
 
 export function LeftSidebar() {
   const leftTab = useUiStore((s) => s.leftTab)
   const leftOpen = useUiStore((s) => s.leftOpen)
+  const leftWidth = useUiStore((s) => s.leftWidth)
   const setLeftTab = useUiStore((s) => s.setLeftTab)
 
   const notes = useVaultStore((s) => s.notes)
@@ -25,6 +25,7 @@ export function LeftSidebar() {
   return (
     <aside
       className={`sidebar sidebar--left${leftOpen ? '' : ' sidebar--collapsed'}`}
+      style={{ width: leftOpen ? leftWidth : 0 }}
       aria-hidden={!leftOpen}
     >
       <div className="sidebar__tabs" role="tablist">
@@ -78,15 +79,13 @@ export function LeftSidebar() {
         </>
       ) : leftTab === 'search' ? (
         <SearchPanel />
-      ) : leftTab === 'tags' ? (
+      ) : (
         <div className="sidebar__body">
           <TagsPanel />
         </div>
-      ) : (
-        <div className="sidebar__body sidebar__body--flush">
-          <GraphView />
-        </div>
       )}
+
+      {leftOpen && <Resizer side="left" />}
     </aside>
   )
 }

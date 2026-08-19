@@ -36,10 +36,9 @@
   --tag: #4db6ac;
   --danger: #e05252;
 
-  /* Metrics */
+  /* Metrics. Sidebar widths are not here: they are resizable, so the store
+     owns them (see uiStore) and sets them inline. */
   --ribbon-width: 44px;
-  --sidebar-width: 260px;
-  --right-sidebar-width: 280px;
   --statusbar-height: 24px;
   --radius: 6px;
   --radius-sm: 4px;

@@ -20,6 +20,36 @@ const FONT = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
 
+/**
+ * Node labels are clipped to a share of the panel rather than drawn at full
+ * length: the graph shares a sidebar now, and an untruncated title runs off
+ * the edge mid-word. Measuring is cached because this runs per node per tick.
+ */
+function fitLabel(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  cache: Map<string, string>,
+): string {
+  const key = `${maxWidth}:${text}`
+  const hit = cache.get(key)
+  if (hit !== undefined) return hit
+
+  let label = text
+  if (ctx.measureText(text).width > maxWidth) {
+    let lo = 0
+    let hi = text.length
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2)
+      if (ctx.measureText(`${text.slice(0, mid)}…`).width <= maxWidth) lo = mid
+      else hi = mid - 1
+    }
+    label = lo > 0 ? `${text.slice(0, lo)}…` : ''
+  }
+  cache.set(key, label)
+  return label
+}
+
 export function GraphView() {
   const notes = useVaultStore((s) => s.notes)
 
@@ -66,6 +96,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     if (!container || !canvas || !ctx) return
 
     let cancelled = false
+    const labelCache = new Map<string, string>()
 
     function project(x: number, y: number) {
       const t = transformRef.current
@@ -117,6 +148,9 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
 
       ctx!.font = FONT
       ctx!.textBaseline = 'middle'
+      // Rounded to a step so a drag-resize reuses cache entries instead of
+      // measuring every title afresh at every intermediate pixel width.
+      const maxLabel = Math.max(60, Math.round((width * 0.4) / 20) * 20)
       for (const node of nodesRef.current) {
         if (node.x == null || node.y == null) continue
         const p = project(node.x, node.y)
@@ -129,7 +163,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         ctx!.fill()
 
         ctx!.fillStyle = isActive ? accent : labelColor
-        ctx!.fillText(node.title, p.x + r + 4, p.y)
+        ctx!.fillText(fitLabel(ctx!, node.title, maxLabel, labelCache), p.x + r + 4, p.y)
       }
     }
 

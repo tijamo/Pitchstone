@@ -57,8 +57,12 @@ export function TagsPanel() {
     <ul className="tags-panel__list">
       {counts.map(([tag, count]) => (
         <li key={tag}>
-          <button className="tags-panel__tag" onClick={() => setSelected(tag)}>
-            <span>#{tag}</span>
+          <button
+            className="tags-panel__tag"
+            title={`#${tag}`}
+            onClick={() => setSelected(tag)}
+          >
+            <span className="tags-panel__name">#{tag}</span>
             <span className="tags-panel__count">{count}</span>
           </button>
         </li>

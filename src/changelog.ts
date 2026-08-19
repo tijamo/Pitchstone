@@ -15,9 +15,11 @@ export const changelog: ChangelogEntry[] = [
     title: 'Backlinks, graph, tags, and search',
     items: [
       'A backlinks panel: every note that links here, with the sentence it links from.',
-      'A graph view of the whole vault — drag nodes, scroll to zoom, click one to open it.',
+      'A graph view of the whole vault — drag nodes, scroll to zoom, click one to open it. It sits in the right sidebar, alongside backlinks and the outline.',
       'A tags browser: every #tag in the vault with its count, click through to the notes carrying it.',
       'Full-text search across every note, with a highlighted matching excerpt.',
+      'Drag either sidebar’s inner edge to resize it, or double-click that edge to snap it back. Widths are remembered.',
+      'Long file trees, outlines, and result lists now scroll inside their panel instead of running off the bottom.',
     ],
   },
   {
