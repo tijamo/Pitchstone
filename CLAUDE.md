@@ -1,10 +1,11 @@
 # Pitchstone — Claude Code notes
 
-Versioning, git, and deployment conventions are carried over from Dodo
-(`tijamo/Dodo`) deliberately — same rules, same reflexes, so switching between
-the two projects doesn't mean switching habits. Everything below is the Dodo
-rule set adapted to this repo. Project-specific notes (architecture, current
-state, gotchas) get added under their own headings as the app takes shape.
+New project, scaffolded as of 2026-08-19. There is **no application code yet** —
+this repo currently contains only the conventions below. Versioning, git, and
+deployment rules are carried over deliberately from Dodo (`tijamo/Dodo`), so
+switching between the two projects doesn't mean switching habits. Project
+notes (architecture, current state, gotchas) get added under their own headings
+as the app takes shape.
 
 ## Versioning
 
@@ -45,14 +46,24 @@ If Tim just says "release this" with no major/minor language, it's a patch.
   see it.
 - **Only ever delete local branches.** Tim removes the remote ones himself —
   don't `git push --delete` / `git push origin :branch`, and don't flag a
-  leftover merged branch on origin as something outstanding.
+  leftover merged branch on origin as something outstanding. (There is one such
+  branch on origin right now, `claude/versioning-deployment-rules-igyqxs`, fully
+  merged into `main` — leave it alone.)
 
 ## Deployment
 
 Netlify auto-deploys on push to `main` via its native GitHub integration
 (configured in Netlify's dashboard, not from this repo). Same shape as Dodo: no
 GitHub Action does the shipping, so if deploys ever stop working, check
-Netlify's own deploy log first.
+Netlify's own deploy log first. Confirmed working — the first push to `main`
+(`2ad91b0`) built and published in 7s.
+
+**Site details:**
+
+- Site name: `pitchstone` (Tijamo team)
+- Site ID: `900a0529-f25d-4e9b-9c2a-1112fd588547`
+- URL: https://pitchstone.netlify.app
+- Admin: https://app.netlify.com/projects/pitchstone
 
 **Rule:** after bumping the version and pushing to `main`, track the resulting
 deploy via the Netlify MCP tools — poll `netlify-project-services-reader` →
@@ -65,24 +76,31 @@ change, stop polling and say so — there may be a stuck build. This is standard
 procedure for every push, not just when asked; the read-only Netlify tools are
 allowlisted in `.claude/settings.json` so this doesn't prompt for permission.
 
-**Site details:**
+## What's in the repo
 
-- Site name: `project-pitchstone`
-- Site ID: `900a0529-f25d-4e9b-9c2a-1112fd588547`
-- URL: https://project-pitchstone.netlify.app
+Everything here is convention scaffolding — no app code yet.
 
-The site exists but has **no deploys and no repo linked yet** — connecting it to
-`tijamo/Pitchstone` has to be done in Netlify's dashboard (the MCP tools can't
-wire the GitHub integration). Until that's done and a first build lands, pushes
-to `main` won't trigger anything, so the deploy-tracking rule above is a no-op.
+- `CLAUDE.md` — this file.
+- `.claude/settings.json` — allowlists the two read-only Netlify MCP tools so
+  deploy polling doesn't prompt, and wires the `SessionStart` hook.
+- `.claude/hooks/session-start.sh` — copied verbatim from Dodo. No-ops unless
+  `CLAUDE_CODE_REMOTE=true`, and bails if the working tree is dirty.
+- `.gitattributes` — LF normalization.
 
 ## Not yet set up
 
-Deliberately left out because this repo has no application code yet — add each
-one as part of the scaffold, not before:
+Deliberately left out because there's no application code yet — add each one as
+part of the scaffold, not before:
 
 - `package.json` (starting version `0.1.0`, per the first-release convention).
 - `netlify.toml` — build command and publish directory depend on the stack.
+  Dodo's is Vite: `command = "npm run build"`, `publish = "dist"`, plus an SPA
+  fallback redirect. Netlify currently reports this project's framework as
+  `unknown` and is publishing the repo root.
 - A `verify` skill (`.claude/skills/verify/SKILL.md`) describing how to build,
   launch, and drive the app locally. Dodo has one; this should too once there's
   something to launch.
+- A changelog. Dodo keeps its in-app changelog as a plain data array in
+  `src/changelog.ts` (`{ ver, title, items }`, newest first, keyed by minor
+  version) rather than hardcoded JSX — worth copying that shape if Pitchstone
+  grows a What's-new surface.
