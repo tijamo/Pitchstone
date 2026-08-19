@@ -96,6 +96,24 @@ change, stop polling and say so — there may be a stuck build. This is standard
 procedure for every push, not just when asked; the read-only Netlify tools are
 allowlisted in `.claude/settings.json` so this doesn't prompt for permission.
 
+## Using the vault as memory
+
+Pitchstone's own MCP server is wired up in `.mcp.json`, so a session in this
+repo gets `list_notes`, `read_note`, `search_notes`, `write_note`, and the rest
+against the live vault. Two things have to be true for it to connect:
+
+1. **`PITCHSTONE_TOKEN` is set** to a personal token — made in the app under
+   Settings → Claude access, and shown only once, since only its hash is
+   stored. Locally that is a shell variable; for a Claude Code web session it
+   is an environment variable on the environment itself.
+2. **The environment's network policy allows `pitchstone.app`.** A web session
+   whose policy does not will report
+   `request blocked: no rule or allowlist entry allows host "pitchstone.app"`
+   against the server in `claude mcp list` — that is the policy talking, not a
+   bad token. See https://code.claude.com/docs/en/claude-code-on-the-web.
+
+`claude mcp list` is the quick check; a working server reads `✔ Connected`.
+
 ## Architecture
 
 Pitchstone is a light Obsidian clone: connected markdown notes, an
@@ -167,6 +185,10 @@ phases 4 and 5 are still unknown here. Ask rather than guessing the mapping.
 - `CLAUDE.md` — this file.
 - `.claude/settings.json` — allowlists the two read-only Netlify MCP tools so
   deploy polling doesn't prompt, and wires the `SessionStart` hook.
+- `.mcp.json` — points Claude Code at Pitchstone's own MCP server, so a session
+  in this repo can use the vault as memory. The token is **not** in the file:
+  it expands from `PITCHSTONE_TOKEN`, because this repo is public. See
+  "Using the vault as memory" below.
 - `.claude/hooks/session-start.sh` — copied verbatim from Dodo. No-ops unless
   `CLAUDE_CODE_REMOTE=true`, and bails if the working tree is dirty.
 - `.claude/skills/verify/SKILL.md` — how to build, launch, and drive the app
