@@ -86,6 +86,12 @@ can read and write the same vault.
   the editor, `d3-force` on canvas for the graph. Plain CSS with custom
   properties — every colour lives in `src/styles/theme.css`, components never
   hardcode one.
+- **Auth:** email and password, the same model as Dodo — `signInWithPassword` /
+  `signUp` behind one form with a sign-in ⇄ create-account toggle, no magic
+  links. Supabase's "Confirm email" is off, so signing up returns a session
+  immediately. `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` come from the
+  environment and are **not** committed, again matching Dodo; both are set as
+  Netlify env vars for the deployed site.
 - **Data:** the vault lives in Supabase, in the shared **Tijamo-hub** project
   (`tpewzbkcmpttrhiuxwqp`, eu-west-1), following the same convention as every
   other Tijamo app: prefixed tables (`pitchstone_*`) under RLS keyed on
@@ -128,27 +134,26 @@ each needs Tim's go-ahead for its minor bump.
 
 ## Gotchas
 
-- **The sandbox cannot reach `pitchstone.netlify.app`.** The agent proxy denies
-  it (403 on CONNECT), so a deploy can only be confirmed through the Netlify
-  MCP tools — never by curling the live site. Don't waste a poll loop on it.
-- **Supabase keys are committed on purpose.** `src/lib/supabase.ts` holds the
-  project URL and publishable key as defaults, with `VITE_SUPABASE_URL` /
-  `VITE_SUPABASE_PUBLISHABLE_KEY` overriding them. Both are public by design —
-  the publishable key grants only what RLS allows, and it ships in the client
-  bundle either way — so this adds no exposure and keeps the deploy working
-  without dashboard setup.
-- **Magic-link auth can't complete headlessly.** To drive the signed-in UI in a
-  browser, seed `localStorage` key `sb-<project-ref>-auth-token` with a session
-  object and intercept `**/rest/v1/**` with Playwright's `page.route`. Requests
-  narrowed by `id=eq.…` come from `.single()` and need one object back, not an
-  array.
+- **The sandbox reaches neither `pitchstone.netlify.app` nor
+  `*.supabase.co`.** The agent proxy denies both (403 on CONNECT), so a deploy
+  can only be confirmed through the Netlify MCP tools, and the signed-in app
+  can never be driven against real Supabase from here. Don't waste a poll loop
+  on either.
+- **So the signed-in UI is driven against a fake.** Intercept both
+  `**/auth/v1/**` and `**/rest/v1/**` with Playwright's `page.route` and answer
+  them from an in-memory store; the schema itself is verified separately by SQL
+  through the Supabase MCP tools. Requests narrowed by `id=eq.…` come from
+  `.single()` and need one object back, not an array.
+- **A missing env var is not a compile error**, so `vite.config.ts` fails the
+  build outright when `NETLIFY` is set and the Supabase keys are absent. That
+  keeps the last good deploy published instead of quietly shipping an app that
+  cannot reach its own vault.
 - **Folders are derived from paths**, not stored. A folder exists exactly as
   long as a note sits in it, so there is no such thing as an empty folder.
 
 ## Not yet set up
 
 - **`SUPABASE_SERVICE_ROLE_KEY`** in Netlify — secret, server-side only, needed
-  from Phase 6 for the MCP function. Tim has to add it; the allowlisted Netlify
-  MCP tools are read-only.
+  from Phase 6 for the MCP function.
 - **Tests.** No test runner yet; verification is a green `npm run build` plus
   driving the app per the `verify` skill.

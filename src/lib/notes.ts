@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { db } from './supabase'
 
 /**
  * Data access for the vault. Every query is scoped by RLS to the signed-in
@@ -22,7 +22,7 @@ export type Note = NoteMeta & { content: string }
 const META_COLUMNS = 'id, path, title, created_at, updated_at'
 
 export async function listNotes(): Promise<NoteMeta[]> {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('pitchstone_notes')
     .select(META_COLUMNS)
     .order('path')
@@ -31,7 +31,7 @@ export async function listNotes(): Promise<NoteMeta[]> {
 }
 
 export async function fetchNote(id: string): Promise<Note> {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('pitchstone_notes')
     .select(`${META_COLUMNS}, content`)
     .eq('id', id)
@@ -41,7 +41,7 @@ export async function fetchNote(id: string): Promise<Note> {
 }
 
 export async function createNote(path: string, content = ''): Promise<Note> {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('pitchstone_notes')
     .insert({ path, content })
     .select(`${META_COLUMNS}, content`)
@@ -53,7 +53,7 @@ export async function createNote(path: string, content = ''): Promise<Note> {
 }
 
 export async function saveContent(id: string, content: string): Promise<NoteMeta> {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('pitchstone_notes')
     .update({ content })
     .eq('id', id)
@@ -64,7 +64,7 @@ export async function saveContent(id: string, content: string): Promise<NoteMeta
 }
 
 export async function renameNote(id: string, path: string): Promise<NoteMeta> {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('pitchstone_notes')
     .update({ path })
     .eq('id', id)
@@ -77,7 +77,7 @@ export async function renameNote(id: string, path: string): Promise<NoteMeta> {
 }
 
 export async function deleteNote(id: string): Promise<void> {
-  const { error } = await supabase.from('pitchstone_notes').delete().eq('id', id)
+  const { error } = await db().from('pitchstone_notes').delete().eq('id', id)
   if (error) throw error
   await resolveLinks()
 }
@@ -88,7 +88,7 @@ export async function deleteNote(id: string): Promise<void> {
  * change; it is a no-op until Phase 3 starts writing links.
  */
 export async function resolveLinks(): Promise<void> {
-  const { error } = await supabase.rpc('pitchstone_resolve_links')
+  const { error } = await db().rpc('pitchstone_resolve_links')
   if (error) throw error
 }
 

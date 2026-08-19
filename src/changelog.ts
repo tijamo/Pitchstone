@@ -14,11 +14,12 @@ export const changelog: ChangelogEntry[] = [
     ver: '0.2',
     title: 'A real vault',
     items: [
-      'Sign in with a magic link — no password to remember.',
+      'Sign in with an email and password, the same as Dodo.',
       'Notes live in Supabase, so your vault follows you between devices.',
       'File explorer with folders, plus create, rename, and delete.',
       'Rename a note with slashes in it — like Projects/Ideas — to move it.',
       'Autosave 0.7s after you stop typing, with save state in the status bar.',
+      'Create your account from the sign-in screen — no invite needed.',
     ],
   },
   {
