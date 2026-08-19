@@ -65,14 +65,16 @@ change, stop polling and say so — there may be a stuck build. This is standard
 procedure for every push, not just when asked; the read-only Netlify tools are
 allowlisted in `.claude/settings.json` so this doesn't prompt for permission.
 
-**Site details — not yet provisioned.** There is no Netlify site for Pitchstone
-at time of writing (searched: no project matching `pitchstone`). Fill these in
-as soon as one exists, since the polling rule above is unusable without them:
+**Site details:**
 
-- Site name: `TODO`
-- Site ID: `TODO`
+- Site name: `project-pitchstone`
+- Site ID: `900a0529-f25d-4e9b-9c2a-1112fd588547`
+- URL: https://project-pitchstone.netlify.app
 
-Until then, skip the deploy-tracking step rather than guessing at a site.
+The site exists but has **no deploys and no repo linked yet** — connecting it to
+`tijamo/Pitchstone` has to be done in Netlify's dashboard (the MCP tools can't
+wire the GitHub integration). Until that's done and a first build lands, pushes
+to `main` won't trigger anything, so the deploy-tracking rule above is a no-op.
 
 ## Not yet set up
 
