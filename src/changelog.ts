@@ -11,6 +11,16 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.5',
+    title: 'Install it',
+    items: [
+      'Pitchstone installs as an app — from the address bar on desktop, or “Add to Home Screen” on a phone — and opens in its own window without browser chrome.',
+      'A proper icon: a cut violet stone, on the tab, the home screen, and the sign-in screen.',
+      'The app itself opens offline. Your notes still need a connection, since the vault lives in Supabase.',
+      'Updates apply on their own, and wait for your last keystroke to save before they do.',
+    ],
+  },
+  {
     ver: '0.4',
     title: 'Backlinks, graph, tags, and search',
     items: [

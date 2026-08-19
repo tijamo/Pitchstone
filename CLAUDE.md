@@ -132,9 +132,16 @@ each needs Tim's go-ahead for its minor bump.
 - `.claude/skills/verify/SKILL.md` — how to build, launch, and drive the app
   locally, including the Playwright/Chromium setup gotchas.
 - `package.json` — version lives here and nowhere else.
-- `netlify.toml` — build command, publish dir, functions dir, SPA fallback.
+- `netlify.toml` — build command, publish dir, functions dir, SPA fallback, and
+  a no-cache header on `/sw.js`.
 - `vite.config.ts` — exposes `package.json`'s version to the bundle as
-  `__APP_VERSION__`, which the status bar renders.
+  `__APP_VERSION__`, which the status bar renders, and configures
+  `vite-plugin-pwa` (manifest, icons, precache).
+- `public/` — the icons that ship: `icon.svg` (also the favicon), the 192/512
+  PNGs, the maskable 512, and `apple-touch-icon.png`.
+- `design/` — icon *sources*: the maskable SVG master and `render-icons.mjs`,
+  which rasterizes the PNGs through Chromium. Not served, not precached.
+- `src/pwa.ts` — service worker registration.
 - `src/changelog.ts` — in-app changelog as plain data, newest first, keyed by
   minor version (Dodo's `{ ver, title, items }` shape).
 - `src/styles/`, `src/components/`, `src/store/` — theme tokens, the app shell,
@@ -171,6 +178,19 @@ each needs Tim's go-ahead for its minor bump.
   is a lezer inline parser so the editor ignores links inside code blocks.
   Change one rule and change the other — brackets are already excluded from
   targets in both.
+- **The mark lives in three places and they must agree**: `public/icon.svg`
+  (favicon and the source for the PNGs), `design/icon-maskable.svg` (same mark,
+  full-bleed ground, inside Android's 80% safe circle), and
+  `src/components/Mark.tsx` (inlined for the sign-in screen). Change the shape
+  and change all three, then re-run `design/render-icons.mjs`.
+- **The service worker is registered in 'prompt' mode but updates immediately
+  anyway.** Not to ask anyone anything — it is the only way to flush a pending
+  autosave *before* the page reloads. Plain `autoUpdate` reloads the moment the
+  new worker lands, which in a notes app can be mid-sentence. See `src/pwa.ts`.
+- **Nothing from Supabase is cached.** The precache is the app shell only, so
+  the app opens offline but the vault does not load. That is deliberate:
+  serving yesterday's notes, and accepting edits that cannot be saved, would be
+  worse than saying plainly that there is no connection.
 - **`@codemirror/lang-markdown` drags in the HTML, JavaScript, and CSS modes**,
   which is larger than the rest of the app put together. The editor is therefore
   lazy-loaded, and `components/editor/editorHandle.ts` deliberately imports

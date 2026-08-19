@@ -307,6 +307,19 @@ button {
   border-radius: 10px;
 }
 
+.gate__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gate__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
 .gate__title {
   margin: 0;
   font-size: 20px;

@@ -6,7 +6,18 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# SPA fallback: every non-asset route is served by the app shell.
+# The service worker must never be served from cache: a stale one keeps
+# handing out the bundle it was built with, and no amount of deploying
+# dislodges it. Netlify revalidates by default, but the worker is the one file
+# where that must not depend on a default.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# SPA fallback: every non-asset route is served by the app shell. Files that
+# exist on disk — sw.js and manifest.webmanifest among them — are served
+# before redirects are considered, so this does not shadow them.
 [[redirects]]
   from = "/*"
   to = "/index.html"

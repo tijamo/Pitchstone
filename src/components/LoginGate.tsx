@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { isConfigured } from '../lib/supabase'
+import { Mark } from './Mark'
 
 /**
  * Email and password, the same model Dodo uses — one form with a sign-in ⇄
@@ -33,7 +34,10 @@ export function LoginGate({ children }: { children: ReactNode }) {
   if (loading) {
     return (
       <div className="gate">
-        <span className="gate__pending">Restoring your session…</span>
+        <div className="gate__loading">
+          <Mark size={40} />
+          <span className="gate__pending">Restoring your session…</span>
+        </div>
       </div>
     )
   }
@@ -51,7 +55,10 @@ export function LoginGate({ children }: { children: ReactNode }) {
           void submit(email, password)
         }}
       >
-        <h1 className="gate__title">Pitchstone</h1>
+        <div className="gate__brand">
+          <Mark size={44} />
+          <h1 className="gate__title">Pitchstone</h1>
+        </div>
         <p className="gate__sub">
           {signingUp
             ? 'Set a password to sync your vault across devices.'
