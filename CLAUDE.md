@@ -76,31 +76,60 @@ change, stop polling and say so — there may be a stuck build. This is standard
 procedure for every push, not just when asked; the read-only Netlify tools are
 allowlisted in `.claude/settings.json` so this doesn't prompt for permission.
 
-## What's in the repo
+## Architecture
 
-Everything here is convention scaffolding — no app code yet.
+Pitchstone is a light Obsidian clone: connected markdown notes, an
+Obsidian-style three-pane interface, and (from Phase 6) an MCP server so Claude
+can read and write the same vault.
+
+- **Frontend:** Vite + React + TypeScript. Zustand for state, CodeMirror 6 for
+  the editor, `d3-force` on canvas for the graph. Plain CSS with custom
+  properties — every colour lives in `src/styles/theme.css`, components never
+  hardcode one.
+- **Data:** the vault lives in Supabase, in the shared **Tijamo-hub** project
+  (`tpewzbkcmpttrhiuxwqp`, eu-west-1), following the same convention as every
+  other Tijamo app: prefixed tables (`pitchstone_*`) under RLS keyed on
+  `auth.uid() = user_id`, sharing the existing auth users.
+- **MCP:** a Netlify Function at `/mcp` speaking Streamable HTTP, authenticated
+  by a personal token hashed into `pitchstone_api_tokens`. Hosting the vault
+  remotely is what makes this possible at all.
+- **Link handling** deliberately splits in two so the app and the MCP server can
+  never drift: *extraction* of `[[wikilinks]]` and `#tags` lives in one shared
+  TypeScript module imported by both, while *resolution* (title →
+  `target_note_id`, including links that were unresolved until their target was
+  created) lives in a SQL function.
+
+The full phase-by-phase build plan — data model, feature scope, and the version
+each phase maps to — was agreed on 2026-08-19. Each phase is a feature set, so
+each needs Tim's go-ahead for its minor bump.
+
+## What's in the repo
 
 - `CLAUDE.md` — this file.
 - `.claude/settings.json` — allowlists the two read-only Netlify MCP tools so
   deploy polling doesn't prompt, and wires the `SessionStart` hook.
 - `.claude/hooks/session-start.sh` — copied verbatim from Dodo. No-ops unless
   `CLAUDE_CODE_REMOTE=true`, and bails if the working tree is dirty.
+- `.claude/skills/verify/SKILL.md` — how to build, launch, and drive the app
+  locally, including the Playwright/Chromium setup gotchas.
+- `package.json` — version lives here and nowhere else.
+- `netlify.toml` — build command, publish dir, functions dir, SPA fallback.
+- `vite.config.ts` — exposes `package.json`'s version to the bundle as
+  `__APP_VERSION__`, which the status bar renders.
+- `src/changelog.ts` — in-app changelog as plain data, newest first, keyed by
+  minor version (Dodo's `{ ver, title, items }` shape).
+- `src/styles/`, `src/components/`, `src/store/` — theme tokens, the app shell,
+  and UI state.
 - `.gitattributes` — LF normalization.
 
 ## Not yet set up
 
-Deliberately left out because there's no application code yet — add each one as
-part of the scaffold, not before:
-
-- `package.json` (starting version `0.1.0`, per the first-release convention).
-- `netlify.toml` — build command and publish directory depend on the stack.
-  Dodo's is Vite: `command = "npm run build"`, `publish = "dist"`, plus an SPA
-  fallback redirect. Netlify currently reports this project's framework as
-  `unknown` and is publishing the repo root.
-- A `verify` skill (`.claude/skills/verify/SKILL.md`) describing how to build,
-  launch, and drive the app locally. Dodo has one; this should too once there's
-  something to launch.
-- A changelog. Dodo keeps its in-app changelog as a plain data array in
-  `src/changelog.ts` (`{ ver, title, items }`, newest first, keyed by minor
-  version) rather than hardcoded JSX — worth copying that shape if Pitchstone
-  grows a What's-new surface.
+- **Netlify environment variables**, which Tim needs to add (the allowlisted
+  Netlify MCP tools are read-only):
+  - `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` — public, needed
+    from Phase 1 onward.
+  - `SUPABASE_SERVICE_ROLE_KEY` — secret, server-side only, needed from Phase 6
+    for the MCP function.
+- **Supabase tables** — the `pitchstone_*` migration lands with Phase 1.
+- **Tests.** No test runner yet; verification is currently a green
+  `npm run build` plus driving the app per the `verify` skill.

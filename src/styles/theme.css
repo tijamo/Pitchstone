@@ -1,0 +1,106 @@
+/*
+ * Pitchstone theme tokens.
+ *
+ * Dark is the default (Obsidian-ish); light is opt-in via [data-theme="light"]
+ * or the OS preference when no explicit choice has been stored. Every colour
+ * used anywhere in the app comes from this file — components never hardcode.
+ */
+
+:root {
+  /* Surfaces, back to front */
+  --bg-ribbon: #131316;
+  --bg-sidebar: #17171b;
+  --bg-primary: #1c1c21;
+  --bg-raised: #232329;
+  --bg-hover: #2a2a32;
+  --bg-active: #32323c;
+
+  /* Ink */
+  --text-normal: #dcddde;
+  --text-muted: #8e8e96;
+  --text-faint: #61616a;
+  --text-on-accent: #ffffff;
+
+  /* Structure */
+  --border: #2b2b33;
+  --border-strong: #3a3a45;
+
+  /* Accent — pitchstone is volcanic glass, so a cool violet sheen */
+  --accent: #8875f5;
+  --accent-hover: #9b8bf7;
+  --accent-soft: rgba(136, 117, 245, 0.16);
+
+  /* Semantic */
+  --link: #a394f8;
+  --link-unresolved: #b06a6a;
+  --tag: #4db6ac;
+  --danger: #e05252;
+
+  /* Metrics */
+  --ribbon-width: 44px;
+  --sidebar-width: 260px;
+  --right-sidebar-width: 280px;
+  --statusbar-height: 24px;
+  --radius: 6px;
+  --radius-sm: 4px;
+
+  /* Type */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  --font-text: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+  --font-size-ui: 13px;
+  --font-size-text: 16px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --bg-ribbon: #e7e7e9;
+    --bg-sidebar: #efeff1;
+    --bg-primary: #ffffff;
+    --bg-raised: #f6f6f8;
+    --bg-hover: #e6e6ea;
+    --bg-active: #dcdce2;
+
+    --text-normal: #2b2b32;
+    --text-muted: #6c6c78;
+    --text-faint: #9a9aa5;
+
+    --border: #dededf;
+    --border-strong: #c4c4cc;
+
+    --accent: #6c56e8;
+    --accent-hover: #5a44d6;
+    --accent-soft: rgba(108, 86, 232, 0.12);
+
+    --link: #5b46cf;
+    --link-unresolved: #b3524f;
+    --tag: #2f8f85;
+  }
+}
+
+:root[data-theme='light'] {
+  --bg-ribbon: #e7e7e9;
+  --bg-sidebar: #efeff1;
+  --bg-primary: #ffffff;
+  --bg-raised: #f6f6f8;
+  --bg-hover: #e6e6ea;
+  --bg-active: #dcdce2;
+
+  --text-normal: #2b2b32;
+  --text-muted: #6c6c78;
+  --text-faint: #9a9aa5;
+
+  --border: #dededf;
+  --border-strong: #c4c4cc;
+
+  --accent: #6c56e8;
+  --accent-hover: #5a44d6;
+  --accent-soft: rgba(108, 86, 232, 0.12);
+
+  --link: #5b46cf;
+  --link-unresolved: #b3524f;
+  --tag: #2f8f85;
+}

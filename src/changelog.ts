@@ -1,0 +1,23 @@
+/**
+ * In-app changelog, newest first, keyed by minor version. Kept as plain data
+ * (not JSX) so it can also be read by a What's-new surface, the MCP server, or
+ * anything else that wants it.
+ */
+export type ChangelogEntry = {
+  ver: string
+  title: string
+  items: string[]
+}
+
+export const changelog: ChangelogEntry[] = [
+  {
+    ver: '0.1',
+    title: 'Scaffold',
+    items: [
+      'Vite + React + TypeScript app, deployed to Netlify on every push to main.',
+      'Obsidian-style three-pane shell: ribbon, left sidebar, editor, right sidebar, status bar.',
+      'Dark and light themes that follow your system preference, with a manual toggle.',
+      'Version shown in the status bar, read straight from package.json.',
+    ],
+  },
+]
