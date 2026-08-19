@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import {
+  backfillIndex,
   createNote,
   deleteNote,
   describeError,
@@ -30,6 +31,12 @@ type VaultState = {
   error: string | null
   /** The note whose name is currently being edited in the explorer, if any. */
   renamingId: string | null
+  /**
+   * Bumped whenever a note's links may have changed. The graph watches this:
+   * its own data is the link table, which the note list alone cannot reveal
+   * has moved — adding a [[link]] to an existing note changes no note ids.
+   */
+  linksVersion: number
 
   load: () => Promise<void>
   open: (id: string) => Promise<void>
@@ -52,6 +59,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   saveStatus: 'idle',
   error: null,
   renamingId: null,
+  linksVersion: 0,
 
   load: async () => {
     set({ loading: true, error: null })
@@ -59,6 +67,22 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       set({ notes: await listNotes(), loading: false })
     } catch (error) {
       set({ loading: false, error: describeError(error) })
+      return
+    }
+
+    // Catch up any note whose tags and links were never extracted — notes
+    // that predate the save path that writes them. Deliberately after the
+    // first render: the vault is usable while this runs, and a vault with
+    // nothing to do pays one cheap indexed query for the privilege.
+    try {
+      if ((await backfillIndex()) > 0) {
+        // Tags are note metadata, so the list just rendered is now out of
+        // date; links are the graph's own data, hence the separate bump.
+        const notes = await listNotes()
+        set((state) => ({ notes, linksVersion: state.linksVersion + 1 }))
+      }
+    } catch {
+      // A vault that cannot catch up still opens; the next load tries again.
     }
   },
 
@@ -99,6 +123,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       set((state) => ({
         saveStatus: pendingWrite ? state.saveStatus : 'saved',
         notes: state.notes.map((n) => (n.id === saved.id ? { ...n, ...saved } : n)),
+        // The save rewrote this note's links, which no note id reflects.
+        linksVersion: state.linksVersion + 1,
       }))
     } catch (error) {
       set({ saveStatus: 'error', error: describeError(error) })
@@ -121,6 +147,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
         // An unnamed note drops straight into renaming, the way Obsidian does.
         // One created from a wikilink already has the name the link gave it.
         renamingId: name ? null : note.id,
+        // Creating a note can resolve links that were dangling until now.
+        linksVersion: state.linksVersion + 1,
       }))
       return note.id
     } catch (error) {
@@ -155,6 +183,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       const saved = await renameNote(id, path)
       set((state) => ({
         notes: state.notes.map((n) => (n.id === id ? { ...n, ...saved } : n)),
+        // The title moved, so links naming the old or new one just re-resolved.
+        linksVersion: state.linksVersion + 1,
       }))
     } catch (error) {
       set({ error: describeError(error) })
@@ -172,6 +202,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       await deleteNote(id)
       set((state) => ({
         notes: state.notes.filter((n) => n.id !== id),
+        // Links into the deleted note just became unresolved.
+        linksVersion: state.linksVersion + 1,
         ...(state.activeId === id
           ? { activeId: null, content: '', saveStatus: 'idle' as SaveStatus }
           : {}),
@@ -188,13 +220,17 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = null
     pendingWrite = null
-    set({
+    set((state) => ({
       notes: [],
       activeId: null,
       content: '',
       saveStatus: 'idle',
       error: null,
       renamingId: null,
-    })
+      // Bumped, not zeroed: the graph must drop one person's links on its way
+      // to another's, and a counter that went backwards could land on a value
+      // it had already seen.
+      linksVersion: state.linksVersion + 1,
+    }))
   },
 }))

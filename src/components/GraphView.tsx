@@ -10,10 +10,16 @@ import {
   type SimulationNodeDatum,
 } from 'd3-force'
 import { useVaultStore } from '../store/vaultStore'
-import { listResolvedLinks } from '../lib/notes'
+import { listLinks } from '../lib/notes'
 import type { NoteMeta } from '../lib/notes'
 
-type GraphNode = SimulationNodeDatum & { id: string; title: string; degree: number }
+type GraphNode = SimulationNodeDatum & {
+  id: string
+  title: string
+  degree: number
+  /** A link target that no note answers to yet — drawn hollow. */
+  unresolved: boolean
+}
 type GraphLink = SimulationLinkDatum<GraphNode>
 
 const FONT = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -70,6 +76,8 @@ export function GraphView() {
 function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   const activeId = useVaultStore((s) => s.activeId)
   const open = useVaultStore((s) => s.open)
+  const openOrCreate = useVaultStore((s) => s.openOrCreate)
+  const linksVersion = useVaultStore((s) => s.linksVersion)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -131,6 +139,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       const nodeColor = styles.getPropertyValue('--text-faint').trim()
       const labelColor = styles.getPropertyValue('--text-muted').trim()
       const accent = styles.getPropertyValue('--accent').trim()
+      const unresolvedColor = styles.getPropertyValue('--link-unresolved').trim()
 
       ctx!.strokeStyle = lineColor
       ctx!.lineWidth = 1
@@ -159,10 +168,23 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
 
         ctx!.beginPath()
         ctx!.arc(p.x, p.y, r, 0, Math.PI * 2)
-        ctx!.fillStyle = isActive ? accent : nodeColor
-        ctx!.fill()
+        if (node.unresolved) {
+          // Hollow, the way an unresolved wikilink reads in the editor: the
+          // note is named but not yet written.
+          ctx!.strokeStyle = unresolvedColor
+          ctx!.lineWidth = 1.5
+          ctx!.stroke()
+          ctx!.lineWidth = 1
+        } else {
+          ctx!.fillStyle = isActive ? accent : nodeColor
+          ctx!.fill()
+        }
 
-        ctx!.fillStyle = isActive ? accent : labelColor
+        ctx!.fillStyle = node.unresolved
+          ? unresolvedColor
+          : isActive
+            ? accent
+            : labelColor
         ctx!.fillText(fitLabel(ctx!, node.title, maxLabel, labelCache), p.x + r + 4, p.y)
       }
     }
@@ -183,25 +205,61 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     const resizeObserver = new ResizeObserver(resize)
     resizeObserver.observe(container)
 
-    listResolvedLinks().then((edges) => {
+    listLinks().then((edges) => {
       if (cancelled) return
 
+      // A link whose target does not exist yet still belongs on the graph —
+      // that is why the schema keeps it. Every such link naming the same title
+      // shares one placeholder node, keyed by the title rather than an id.
+      const placeholderId = (title: string) => `unresolved:${title.toLowerCase()}`
+      const byNoteId = new Map(notes.map((n) => [n.id, n]))
+
+      const endpoints = edges
+        .filter((e) => byNoteId.has(e.source_note_id))
+        .map((e) => ({
+          from: e.source_note_id,
+          to: e.target_note_id ?? placeholderId(e.target_title),
+          title: e.target_title,
+          resolved: e.target_note_id != null,
+        }))
+        // A link out to a note that has since been deleted resolves to
+        // nothing and names nothing useful; drop it rather than plot it.
+        .filter((e) => !e.resolved || byNoteId.has(e.to))
+
       const degree = new Map<string, number>()
-      for (const e of edges) {
-        degree.set(e.source_note_id, (degree.get(e.source_note_id) ?? 0) + 1)
-        degree.set(e.target_note_id, (degree.get(e.target_note_id) ?? 0) + 1)
+      for (const e of endpoints) {
+        degree.set(e.from, (degree.get(e.from) ?? 0) + 1)
+        degree.set(e.to, (degree.get(e.to) ?? 0) + 1)
       }
 
       const nodes: GraphNode[] = notes.map((n) => ({
         id: n.id,
         title: n.title,
         degree: degree.get(n.id) ?? 0,
+        unresolved: false,
       }))
-      const byId = new Map(nodes.map((n) => [n.id, n]))
-      const links: GraphLink[] = edges
-        .filter((e) => byId.has(e.source_note_id) && byId.has(e.target_note_id))
-        .map((e) => ({ source: e.source_note_id, target: e.target_note_id }))
+      const seen = new Set(nodes.map((n) => n.id))
+      for (const e of endpoints) {
+        if (e.resolved || seen.has(e.to)) continue
+        seen.add(e.to)
+        nodes.push({ id: e.to, title: e.title, degree: degree.get(e.to) ?? 0, unresolved: true })
+      }
 
+      // Carry positions over from the previous layout so a refresh — a save
+      // that changed one link — nudges the graph rather than reshuffling it.
+      const previous = new Map(nodesRef.current.map((n) => [n.id, n]))
+      let carried = 0
+      for (const node of nodes) {
+        const old = previous.get(node.id)
+        if (!old || old.x == null) continue
+        node.x = old.x
+        node.y = old.y
+        node.vx = old.vx
+        node.vy = old.vy
+        carried++
+      }
+
+      const links: GraphLink[] = endpoints.map((e) => ({ source: e.from, target: e.to }))
       nodesRef.current = nodes
       linksRef.current = links
 
@@ -218,6 +276,10 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         .force('center', forceCenter(width / 2, height / 2))
         .force('collide', forceCollide<GraphNode>((d) => radiusOf(d) + 6))
         .on('tick', draw)
+        // A first layout needs the full run; a refresh of a graph already on
+        // screen only needs to settle the part that moved.
+        .alpha(carried > 0 ? 0.25 : 1)
+        .restart()
 
       resize()
     })
@@ -268,7 +330,12 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         drag.node.fx = null
         drag.node.fy = null
         simRef.current?.alphaTarget(0)
-        if (!drag.moved) void open(drag.node.id)
+        if (!drag.moved) {
+          // Clicking a placeholder writes the note it stands for, which is
+          // what following the wikilink itself would have done.
+          if (drag.node.unresolved) void openOrCreate(drag.node.title)
+          else void open(drag.node.id)
+        }
         dragRef.current = null
       }
       panRef.current = null
@@ -301,10 +368,12 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       canvas.removeEventListener('pointerup', handlePointerUp)
       canvas.removeEventListener('wheel', handleWheel)
     }
-    // Re-run only when the vault's set of notes changes; content edits and
-    // active-note changes are picked up live via the refs above.
+    // Re-run when the set of notes changes, and when anything may have
+    // rewritten the link table — adding a [[link]] to an existing note leaves
+    // every note id untouched, so noteIds alone would never notice. The
+    // active note is picked up live via the refs above instead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noteIds])
+  }, [noteIds, linksVersion])
 
   return (
     <div ref={containerRef} className="graph-view">

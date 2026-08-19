@@ -20,6 +20,9 @@ export const changelog: ChangelogEntry[] = [
       'Full-text search across every note, with a highlighted matching excerpt.',
       'Drag either sidebar’s inner edge to resize it, or double-click that edge to snap it back. Widths are remembered.',
       'Long file trees, outlines, and result lists now scroll inside their panel instead of running off the bottom.',
+      'Notes written before this release get their tags and links read on first open, so the tags panel and graph are no longer empty for them.',
+      'The graph keeps up as you write — add a [[link]] and it appears, without a reload.',
+      'The graph also shows notes you have linked to but not written yet, as hollow circles. Click one to create it.',
     ],
   },
   {

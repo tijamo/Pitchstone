@@ -155,16 +155,75 @@ function excerpt(content: string, from: number, to: number, radius = 60): string
   return `${start > 0 ? '…' : ''}${text}${end < content.length ? '…' : ''}`
 }
 
-export type LinkEdge = { source_note_id: string; target_note_id: string }
+export type LinkEdge = {
+  source_note_id: string
+  /** null when the link names a note that does not exist yet. */
+  target_note_id: string | null
+  target_title: string
+}
 
-/** Every link that currently resolves to a note, for the graph view. */
-export async function listResolvedLinks(): Promise<LinkEdge[]> {
+/**
+ * Every link in the vault, for the graph — including the unresolved ones. A
+ * link to a note that has not been created yet is kept on purpose (see the
+ * schema), so the graph can show it the way Obsidian does.
+ */
+export async function listLinks(): Promise<LinkEdge[]> {
   const { data, error } = await db()
     .from('pitchstone_links')
-    .select('source_note_id, target_note_id')
-    .not('target_note_id', 'is', null)
+    .select('source_note_id, target_note_id, target_title')
   if (error) throw error
   return (data ?? []) as LinkEdge[]
+}
+
+// ---------------------------------------------------------------------------
+// Indexing
+// ---------------------------------------------------------------------------
+
+/**
+ * Notes whose derived data has never been built — everything written before
+ * pitchstone_save_note existed, plus anything inserted with content directly.
+ * Content comes back with them because the parse happens here, in the one
+ * module that is allowed to do it.
+ */
+export async function fetchUnindexed(limit = 100): Promise<{ id: string; content: string }[]> {
+  const { data, error } = await db()
+    .from('pitchstone_notes')
+    .select('id, content')
+    .is('indexed_at', null)
+    .limit(limit)
+  if (error) throw error
+  return (data ?? []) as { id: string; content: string }[]
+}
+
+/** Rebuild one note's tags, frontmatter, and links without touching its text. */
+export async function reindexNote(id: string, content: string): Promise<void> {
+  const { error } = await db().rpc('pitchstone_reindex_note', {
+    p_note_id: id,
+    p_tags: collectTags(content),
+    p_frontmatter: parseFrontmatter(content).data,
+    p_links: dedupeLinks(extractLinks(content)),
+  })
+  if (error) throw error
+}
+
+/**
+ * One-time catch-up pass, run on vault load. Returns how many notes it
+ * indexed, so the caller knows whether the note list is now stale. Batched
+ * rather than unbounded: a large vault catches up over a few loads instead of
+ * blocking the first one.
+ */
+export async function backfillIndex(): Promise<number> {
+  const pending = await fetchUnindexed()
+  let done = 0
+  for (const note of pending) {
+    try {
+      await reindexNote(note.id, note.content)
+      done++
+    } catch {
+      // One unparseable note must not stop the rest of the vault catching up.
+    }
+  }
+  return done
 }
 
 export type SearchResult = { id: string; path: string; title: string; snippet: string }
