@@ -9,7 +9,7 @@ import {
   saveContent,
   type NoteMeta,
 } from '../lib/notes'
-import { dirname, joinPath, toPath, uniquePath } from '../lib/paths'
+import { dirname, joinPath, sanitizeSegment, toPath, uniquePath } from '../lib/paths'
 
 export type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
 
@@ -35,7 +35,8 @@ type VaultState = {
   open: (id: string) => Promise<void>
   edit: (content: string) => void
   flush: () => Promise<void>
-  create: (dir?: string) => Promise<void>
+  create: (dir?: string, name?: string) => Promise<string | null>
+  openOrCreate: (title: string) => Promise<void>
   rename: (id: string, input: string) => Promise<void>
   remove: (id: string) => Promise<void>
   setRenaming: (id: string | null) => void
@@ -104,22 +105,42 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     }
   },
 
-  create: async (dir = '') => {
+  create: async (dir = '', name) => {
+    // A queued write belongs to the note being left behind, not the new one.
+    await get().flush()
     try {
       const taken = new Set(get().notes.map((n) => n.path))
-      const path = uniquePath(taken, `${joinPath(dir, 'Untitled')}.md`)
+      const base = sanitizeSegment(name ?? 'Untitled') || 'Untitled'
+      const path = uniquePath(taken, `${joinPath(dir, base)}.md`)
       const note = await createNote(path)
       set((state) => ({
         notes: [...state.notes, note],
         activeId: note.id,
         content: note.content,
         saveStatus: 'idle',
-        // Drop straight into renaming, the way Obsidian does for a new note.
-        renamingId: note.id,
+        // An unnamed note drops straight into renaming, the way Obsidian does.
+        // One created from a wikilink already has the name the link gave it.
+        renamingId: name ? null : note.id,
       }))
+      return note.id
     } catch (error) {
       set({ error: describeError(error) })
+      return null
     }
+  },
+
+  // Following a wikilink: open the note it names, or create it alongside the
+  // current one if it does not exist yet.
+  openOrCreate: async (title) => {
+    const state = get()
+    const wanted = title.trim().toLowerCase()
+    const existing = state.notes.find((n) => n.title.toLowerCase() === wanted)
+    if (existing) {
+      await state.open(existing.id)
+      return
+    }
+    const active = state.notes.find((n) => n.id === state.activeId)
+    await state.create(active ? dirname(active.path) : '', title.trim())
   },
 
   rename: async (id, input) => {

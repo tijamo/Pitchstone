@@ -1,13 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { Icon } from './Icon'
 import { useUiStore } from '../store/uiStore'
 import { useVaultStore } from '../store/vaultStore'
 
-/**
- * A plain textarea for now. CodeMirror 6 replaces it in Phase 2 — keeping the
- * editor dumb here means the vault store, autosave, and explorer can all be
- * exercised end to end first.
- */
+// CodeMirror's markdown mode pulls in the HTML, JavaScript, and CSS modes for
+// embedded code, which together are larger than the rest of the app. Splitting
+// it out keeps the shell light; the effect below fetches the chunk as soon as
+// the app is up, so it is already there by the time a note is opened.
+const Editor = lazy(() => import('./editor/Editor'))
+
 export function EditorPane() {
   const toggleLeft = useUiStore((s) => s.toggleLeft)
   const toggleRight = useUiStore((s) => s.toggleRight)
@@ -16,19 +17,13 @@ export function EditorPane() {
 
   const notes = useVaultStore((s) => s.notes)
   const activeId = useVaultStore((s) => s.activeId)
-  const content = useVaultStore((s) => s.content)
-  const edit = useVaultStore((s) => s.edit)
   const create = useVaultStore((s) => s.create)
-  const renamingId = useVaultStore((s) => s.renamingId)
 
   const active = notes.find((n) => n.id === activeId) ?? null
-  const textarea = useRef<HTMLTextAreaElement>(null)
 
-  // A freshly created note is opened *and* dropped into rename mode at once, so
-  // focusing the editor here would blur the rename box out from under the user.
   useEffect(() => {
-    if (activeId && !renamingId) textarea.current?.focus()
-  }, [activeId, renamingId])
+    void import('./editor/Editor')
+  }, [])
 
   return (
     <main className="main">
@@ -57,15 +52,9 @@ export function EditorPane() {
       <div className="editor">
         {active ? (
           <div className="editor__inner">
-            <textarea
-              ref={textarea}
-              className="editor__textarea"
-              value={content}
-              spellCheck
-              placeholder="Start writing…"
-              aria-label={`Contents of ${active.title}`}
-              onChange={(e) => edit(e.target.value)}
-            />
+            <Suspense fallback={null}>
+              <Editor />
+            </Suspense>
           </div>
         ) : (
           <div className="empty">

@@ -139,8 +139,11 @@ each needs Tim's go-ahead for its minor bump.
   minor version (Dodo's `{ ver, title, items }` shape).
 - `src/styles/`, `src/components/`, `src/store/` — theme tokens, the app shell,
   and UI/auth/vault state.
-- `src/lib/` — the Supabase client, vault path helpers (`paths.ts`), and the
-  note data access layer (`notes.ts`).
+- `src/lib/` — the Supabase client, vault path helpers (`paths.ts`), the note
+  data access layer (`notes.ts`), and `markdown/parse.ts`, the shared
+  extraction module (see Architecture) with its unit tests beside it.
+- `src/components/editor/` — the CodeMirror 6 editor: the wikilink syntax
+  extension, the live-preview decorations, the theme, and `[[` completion.
 - `supabase/migrations/` — the applied schema, kept in the repo for the record.
   Migrations are applied through the Supabase MCP tools, not a local CLI.
 - `.gitattributes` — LF normalization.
@@ -163,10 +166,22 @@ each needs Tim's go-ahead for its minor bump.
   cannot reach its own vault.
 - **Folders are derived from paths**, not stored. A folder exists exactly as
   long as a note sits in it, so there is no such thing as an empty folder.
+- **Wikilinks are parsed twice, and the two must agree.** `lib/markdown/parse.ts`
+  scans note text for storage and search; `components/editor/wikilinkSyntax.ts`
+  is a lezer inline parser so the editor ignores links inside code blocks.
+  Change one rule and change the other — brackets are already excluded from
+  targets in both.
+- **`@codemirror/lang-markdown` drags in the HTML, JavaScript, and CSS modes**,
+  which is larger than the rest of the app put together. The editor is therefore
+  lazy-loaded, and `components/editor/editorHandle.ts` deliberately imports
+  nothing from CodeMirror — the outline panel imports it, so a single type
+  import there pulls the whole editor back into the main chunk.
 
 ## Not yet set up
 
 - **`SUPABASE_SERVICE_ROLE_KEY`** in Netlify — secret, server-side only, needed
   from Phase 6 for the MCP function.
-- **Tests.** No test runner yet; verification is a green `npm run build` plus
-  driving the app per the `verify` skill.
+- **Component and end-to-end tests.** `npm test` covers `lib/markdown/parse.ts`
+  only, through Node's built-in runner and type stripping (`tsconfig.test.json`
+  type-checks it separately — it is deliberately outside the app's build graph).
+  Everything else is verified by driving the app per the `verify` skill.

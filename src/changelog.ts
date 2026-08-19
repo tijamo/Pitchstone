@@ -11,6 +11,18 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.3',
+    title: 'The editor',
+    items: [
+      'A proper markdown editor: headings, bold, and italics render as you write, with the raw syntax reappearing on the line you are editing.',
+      '[[Wikilinks]] render as links — click one to open that note, or to create it if it does not exist yet.',
+      'Links to notes that do not exist yet are shown differently, so a typo is obvious.',
+      'Type [[ to search your notes by title and insert a link.',
+      'An outline of the open note’s headings in the right sidebar; click one to jump to it.',
+      'Frontmatter folds away, and lists and brackets close themselves as you type.',
+    ],
+  },
+  {
     ver: '0.2',
     title: 'A real vault',
     items: [

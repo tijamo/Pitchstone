@@ -1,15 +1,24 @@
 {
   "name": "pitchstone",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "tsc -b --noEmit"
+    "lint": "tsc -b --noEmit",
+    "test": "tsc -p tsconfig.test.json && node --experimental-strip-types --test \"src/**/*.test.ts\""
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.11.0",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.9",
+    "@lezer/highlight": "^1.2.3",
+    "@lezer/markdown": "^1.7.2",
     "@supabase/supabase-js": "^2.112.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

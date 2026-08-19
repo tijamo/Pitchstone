@@ -530,3 +530,34 @@ button {
 .statusbar__item--error {
   color: var(--danger);
 }
+
+/* ---------- CodeMirror host ---------- */
+
+.editor__cm {
+  min-height: 60vh;
+}
+
+/* ---------- Outline ---------- */
+
+.outline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outline__item {
+  display: block;
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline__item:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
