@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useUiStore, type RightTab } from '../store/uiStore'
 import { useVaultStore } from '../store/vaultStore'
 import { extractHeadings } from '../lib/markdown/parse'
+import { fetchBacklinks, type Backlink } from '../lib/notes'
 import { revealLine } from './editor/editorHandle'
 
 const TABS: { tab: RightTab; label: string }[] = [
@@ -16,7 +17,39 @@ export function RightSidebar() {
 
   const content = useVaultStore((s) => s.content)
   const activeId = useVaultStore((s) => s.activeId)
+  const saveStatus = useVaultStore((s) => s.saveStatus)
+  const notes = useVaultStore((s) => s.notes)
+  const open = useVaultStore((s) => s.open)
   const headings = useMemo(() => extractHeadings(content), [content])
+  const activeTitle = notes.find((n) => n.id === activeId)?.title ?? ''
+
+  const [backlinks, setBacklinks] = useState<Backlink[]>([])
+  const [loadingBacklinks, setLoadingBacklinks] = useState(false)
+
+  // Refetched whenever the open note changes, and whenever a save lands
+  // (a link could have been added, removed, or newly resolved).
+  useEffect(() => {
+    if (rightTab !== 'backlinks' || !activeId) {
+      setBacklinks([])
+      return
+    }
+    let cancelled = false
+    setLoadingBacklinks(true)
+    fetchBacklinks(activeId, activeTitle)
+      .then((result) => {
+        if (!cancelled) setBacklinks(result)
+      })
+      .catch(() => {
+        if (!cancelled) setBacklinks([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingBacklinks(false)
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rightTab, activeId, activeTitle, saveStatus === 'saved'])
 
   return (
     <aside
@@ -39,13 +72,41 @@ export function RightSidebar() {
 
       <div className="sidebar__body">
         {rightTab === 'backlinks' ? (
-          <div className="empty empty--pane">
-            <span className="empty__title">No backlinks</span>
-            <span className="empty__hint">
-              Notes that link here with [[wikilinks]] will be listed with their
-              surrounding context.
-            </span>
-          </div>
+          !activeId ? (
+            <div className="empty empty--pane">
+              <span className="empty__title">Nothing open</span>
+              <span className="empty__hint">
+                Open a note to see which others link to it.
+              </span>
+            </div>
+          ) : loadingBacklinks ? (
+            <div className="empty empty--pane">
+              <span className="empty__title">Loading…</span>
+            </div>
+          ) : backlinks.length === 0 ? (
+            <div className="empty empty--pane">
+              <span className="empty__title">No backlinks</span>
+              <span className="empty__hint">
+                Notes that link here with [[wikilinks]] will be listed with their
+                surrounding context.
+              </span>
+            </div>
+          ) : (
+            <ul className="backlinks">
+              {backlinks.map(({ note, snippet }) => (
+                <li key={note.id}>
+                  <button
+                    className="backlinks__item"
+                    title={note.path}
+                    onClick={() => void open(note.id)}
+                  >
+                    <span className="backlinks__title">{note.title}</span>
+                    {snippet && <span className="backlinks__snippet">{snippet}</span>}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
         ) : !activeId ? (
           <div className="empty empty--pane">
             <span className="empty__title">Nothing open</span>

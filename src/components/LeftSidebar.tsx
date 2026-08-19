@@ -1,6 +1,9 @@
 import { useUiStore, type LeftTab } from '../store/uiStore'
 import { useVaultStore } from '../store/vaultStore'
 import { FileTree } from './FileTree'
+import { SearchPanel } from './SearchPanel'
+import { TagsPanel } from './TagsPanel'
+import { GraphView } from './GraphView'
 import { Icon } from './Icon'
 
 const TABS: { tab: LeftTab; label: string }[] = [
@@ -9,21 +12,6 @@ const TABS: { tab: LeftTab; label: string }[] = [
   { tab: 'tags', label: 'Tags' },
   { tab: 'graph', label: 'Graph' },
 ]
-
-const EMPTY: Record<Exclude<LeftTab, 'files'>, { title: string; hint: string }> = {
-  search: {
-    title: 'Search your vault',
-    hint: 'Full-text search across every note, with matching excerpts.',
-  },
-  tags: {
-    title: 'No tags yet',
-    hint: 'Tags written as #tag, or listed in a note’s frontmatter, are collected here.',
-  },
-  graph: {
-    title: 'Nothing to plot',
-    hint: 'Once notes link to each other, the graph shows how they connect.',
-  },
-}
 
 export function LeftSidebar() {
   const leftTab = useUiStore((s) => s.leftTab)
@@ -88,12 +76,15 @@ export function LeftSidebar() {
             )}
           </div>
         </>
-      ) : (
+      ) : leftTab === 'search' ? (
+        <SearchPanel />
+      ) : leftTab === 'tags' ? (
         <div className="sidebar__body">
-          <div className="empty empty--pane">
-            <span className="empty__title">{EMPTY[leftTab].title}</span>
-            <span className="empty__hint">{EMPTY[leftTab].hint}</span>
-          </div>
+          <TagsPanel />
+        </div>
+      ) : (
+        <div className="sidebar__body sidebar__body--flush">
+          <GraphView />
         </div>
       )}
     </aside>

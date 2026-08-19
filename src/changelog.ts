@@ -11,6 +11,16 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.4',
+    title: 'Backlinks, graph, tags, and search',
+    items: [
+      'A backlinks panel: every note that links here, with the sentence it links from.',
+      'A graph view of the whole vault — drag nodes, scroll to zoom, click one to open it.',
+      'A tags browser: every #tag in the vault with its count, click through to the notes carrying it.',
+      'Full-text search across every note, with a highlighted matching excerpt.',
+    ],
+  },
+  {
     ver: '0.3',
     title: 'The editor',
     items: [
