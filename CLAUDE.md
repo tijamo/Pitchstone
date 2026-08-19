@@ -65,6 +65,19 @@ Netlify's own deploy log first. Confirmed working — the first push to `main`
 - URL: https://pitchstone.netlify.app
 - Admin: https://app.netlify.com/projects/pitchstone
 
+**Environment variables** (set on the site, context `all`):
+
+| Key | Purpose |
+| --- | --- |
+| `VITE_SUPABASE_URL` | Tijamo-hub project URL; read at build time by Vite. |
+| `VITE_SUPABASE_ANON_KEY` | Public anon key. Not secret — it ships in the bundle and RLS is the actual protection. |
+
+Both are **required**: `vite.config.ts` fails the build when `NETLIFY` is set and
+either is missing, so a misconfigured deploy errors out instead of publishing an
+app that cannot reach its vault. Note that `manage-env-vars` needs the write
+Netlify tool, and its `getAllEnvVars` listing can lag by a minute after an
+upsert — read it back twice before concluding a variable did not save.
+
 **Rule:** after bumping the version and pushing to `main`, track the resulting
 deploy via the Netlify MCP tools — poll `netlify-project-services-reader` →
 `get-project` (or `netlify-deploy-services-reader` → `get-deploy-for-site`)
