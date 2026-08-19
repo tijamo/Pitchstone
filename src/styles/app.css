@@ -156,6 +156,9 @@ button {
 }
 
 .tabbar__title {
+  flex: 1;
+  min-width: 0;
+  margin-left: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -226,4 +229,274 @@ button {
 
 .statusbar__version {
   font-family: var(--font-mono);
+}
+
+/* ---------- Login gate ---------- */
+
+.gate {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  background: var(--bg-sidebar);
+}
+
+.gate__pending {
+  color: var(--text-faint);
+}
+
+.gate__card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(360px, calc(100vw - 48px));
+  padding: 28px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.gate__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.gate__sub {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.gate__input {
+  padding: 9px 11px;
+  background: var(--bg-raised);
+  color: var(--text-normal);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.gate__input:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.gate__button {
+  padding: 9px 11px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-radius: var(--radius);
+  font-weight: 500;
+}
+
+.gate__button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.gate__button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.gate__sent {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.gate__error {
+  margin: 0;
+  color: var(--danger);
+}
+
+/* ---------- Sidebar header ---------- */
+
+.sidebar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sidebar__header-label {
+  padding-left: 2px;
+}
+
+/* ---------- File tree ---------- */
+
+.tree,
+.tree ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tree__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+}
+
+.tree__row:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.tree__row--active {
+  background: var(--bg-active);
+  color: var(--text-normal);
+}
+
+.tree__row--folder {
+  color: var(--text-faint);
+}
+
+.tree__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.tree__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree__chevron {
+  display: inline-block;
+  width: 10px;
+  font-size: 9px;
+  transition: transform 100ms ease;
+}
+
+.tree__chevron--open {
+  transform: rotate(90deg);
+}
+
+.tree__action {
+  display: none;
+  place-items: center;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+}
+
+/* Row actions are revealed on hover, and on focus so they stay reachable from
+   the keyboard rather than being mouse-only. */
+.sidebar__header .tree__action,
+.tree__row:hover .tree__action,
+.tree__row:focus-within .tree__action {
+  display: grid;
+}
+
+.tree__action:hover {
+  background: var(--bg-active);
+  color: var(--text-normal);
+}
+
+.tree__action--danger:hover {
+  color: var(--danger);
+}
+
+.tree__rename {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 5px;
+  margin: 1px 0;
+  background: var(--bg-primary);
+  color: var(--text-normal);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.tree__rename:focus {
+  outline: none;
+}
+
+/* ---------- Editor ---------- */
+
+.editor__textarea {
+  display: block;
+  width: 100%;
+  min-height: 60vh;
+  padding: 0;
+  background: none;
+  color: inherit;
+  border: none;
+  resize: none;
+  font: inherit;
+  line-height: inherit;
+}
+
+.editor__textarea:focus {
+  outline: none;
+}
+
+.empty__button {
+  margin-top: 6px;
+  padding: 6px 12px;
+  background: var(--bg-raised);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+}
+
+.empty__button:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.empty__hint code {
+  padding: 1px 4px;
+  background: var(--bg-raised);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* ---------- Toast ---------- */
+
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 36px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 380px;
+  padding: 9px 12px;
+  background: var(--bg-raised);
+  color: var(--text-normal);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.28);
+}
+
+.toast__dismiss {
+  color: var(--text-faint);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.toast__dismiss:hover {
+  color: var(--text-normal);
+}
+
+.statusbar__item--error {
+  color: var(--danger);
 }

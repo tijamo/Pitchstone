@@ -1,5 +1,7 @@
 import { Icon, type IconName } from './Icon'
 import { useUiStore, type LeftTab } from '../store/uiStore'
+import { useAuthStore } from '../store/authStore'
+import { useVaultStore } from '../store/vaultStore'
 
 const TABS: { tab: LeftTab; icon: IconName; label: string }[] = [
   { tab: 'files', icon: 'files', label: 'Files' },
@@ -13,10 +15,17 @@ export function Ribbon() {
   const leftOpen = useUiStore((s) => s.leftOpen)
   const setLeftTab = useUiStore((s) => s.setLeftTab)
   const toggleTheme = useUiStore((s) => s.toggleTheme)
+  const create = useVaultStore((s) => s.create)
+  const signOut = useAuthStore((s) => s.signOut)
 
   return (
     <nav className="ribbon" aria-label="Primary">
-      <button className="icon-button" title="New note" aria-label="New note">
+      <button
+        className="icon-button"
+        title="New note"
+        aria-label="New note"
+        onClick={() => void create('')}
+      >
         <Icon name="file-plus" />
       </button>
 
@@ -44,6 +53,15 @@ export function Ribbon() {
         onClick={toggleTheme}
       >
         <Icon name="settings" />
+      </button>
+
+      <button
+        className="icon-button"
+        title="Sign out"
+        aria-label="Sign out"
+        onClick={() => void signOut()}
+      >
+        <Icon name="log-out" />
       </button>
     </nav>
   )

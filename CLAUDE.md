@@ -119,17 +119,36 @@ each needs Tim's go-ahead for its minor bump.
 - `src/changelog.ts` — in-app changelog as plain data, newest first, keyed by
   minor version (Dodo's `{ ver, title, items }` shape).
 - `src/styles/`, `src/components/`, `src/store/` — theme tokens, the app shell,
-  and UI state.
+  and UI/auth/vault state.
+- `src/lib/` — the Supabase client, vault path helpers (`paths.ts`), and the
+  note data access layer (`notes.ts`).
+- `supabase/migrations/` — the applied schema, kept in the repo for the record.
+  Migrations are applied through the Supabase MCP tools, not a local CLI.
 - `.gitattributes` — LF normalization.
+
+## Gotchas
+
+- **The sandbox cannot reach `pitchstone.netlify.app`.** The agent proxy denies
+  it (403 on CONNECT), so a deploy can only be confirmed through the Netlify
+  MCP tools — never by curling the live site. Don't waste a poll loop on it.
+- **Supabase keys are committed on purpose.** `src/lib/supabase.ts` holds the
+  project URL and publishable key as defaults, with `VITE_SUPABASE_URL` /
+  `VITE_SUPABASE_PUBLISHABLE_KEY` overriding them. Both are public by design —
+  the publishable key grants only what RLS allows, and it ships in the client
+  bundle either way — so this adds no exposure and keeps the deploy working
+  without dashboard setup.
+- **Magic-link auth can't complete headlessly.** To drive the signed-in UI in a
+  browser, seed `localStorage` key `sb-<project-ref>-auth-token` with a session
+  object and intercept `**/rest/v1/**` with Playwright's `page.route`. Requests
+  narrowed by `id=eq.…` come from `.single()` and need one object back, not an
+  array.
+- **Folders are derived from paths**, not stored. A folder exists exactly as
+  long as a note sits in it, so there is no such thing as an empty folder.
 
 ## Not yet set up
 
-- **Netlify environment variables**, which Tim needs to add (the allowlisted
-  Netlify MCP tools are read-only):
-  - `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` — public, needed
-    from Phase 1 onward.
-  - `SUPABASE_SERVICE_ROLE_KEY` — secret, server-side only, needed from Phase 6
-    for the MCP function.
-- **Supabase tables** — the `pitchstone_*` migration lands with Phase 1.
-- **Tests.** No test runner yet; verification is currently a green
-  `npm run build` plus driving the app per the `verify` skill.
+- **`SUPABASE_SERVICE_ROLE_KEY`** in Netlify — secret, server-side only, needed
+  from Phase 6 for the MCP function. Tim has to add it; the allowlisted Netlify
+  MCP tools are read-only.
+- **Tests.** No test runner yet; verification is a green `npm run build` plus
+  driving the app per the `verify` skill.

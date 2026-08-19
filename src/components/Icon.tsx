@@ -15,6 +15,9 @@ export type IconName =
   | 'settings'
   | 'panel-left'
   | 'panel-right'
+  | 'pencil'
+  | 'trash'
+  | 'log-out'
 
 const PATHS: Record<IconName, ReactElement> = {
   'file-plus': (
@@ -76,6 +79,26 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <path d="M14 4v16" />
+    </>
+  ),
+  pencil: (
+    <>
+      <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z" />
+      <path d="m15 6 3 3" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4 7h16M10 7V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2" />
+      <path d="M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7" />
+      <path d="M10 11v6M14 11v6" />
+    </>
+  ),
+  'log-out': (
+    <>
+      <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
+      <path d="M10 17l-5-5 5-5" />
+      <path d="M5 12h11" />
     </>
   ),
 }
