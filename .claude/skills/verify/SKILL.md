@@ -9,6 +9,24 @@ Pitchstone is a Vite + React + TypeScript SPA deployed to Netlify. Once the MCP
 server lands (Phase 6) there are also Netlify Functions, which Vite's own dev
 server does not run — see "With functions" below.
 
+## First: write a `.env.local`
+
+Do this before building anything you intend to *look at*. Without it the app
+renders "Pitchstone isn't configured" instead of the sign-in form, and Vite
+tree-shakes the whole Supabase client out of the bundle — so sizes read ~240 kB
+instead of the ~460 kB Netlify actually ships.
+
+```bash
+cat > .env.local <<'EOF'
+VITE_SUPABASE_URL=https://tpewzbkcmpttrhiuxwqp.supabase.co
+VITE_SUPABASE_ANON_KEY=verify-local-placeholder-anon-key
+EOF
+```
+
+A placeholder key is fine — the sandbox cannot reach Supabase anyway, and every
+request is intercepted (see "Drive it in a browser"). `.env.local` is
+gitignored; delete it before the final build so the pushed state is clean.
+
 ## Type-check and build
 
 ```bash
@@ -67,6 +85,30 @@ Install `playwright` into a scratch directory rather than adding it to
 `src/styles/theme.css`; a hardcoded colour in a component only shows up when you
 flip `colorScheme`.
 
+### Anything behind the sign-in gate needs a fake Supabase
+
+The sandbox cannot reach `*.supabase.co`, so intercept it and answer from an
+in-memory store:
+
+```js
+await page.route('**/rest/v1/**', handleRest)  // notes, links, RPCs
+await page.route('**/auth/v1/**', handleAuth)  // return a session for /token
+```
+
+Two things that will waste an hour if you don't know them:
+
+- A request whose `accept` header is `application/vnd.pgrst.object+json` came
+  from `.single()` and wants **one object**, not an array.
+- PostgREST filters arrive as query params in their own syntax — `id=eq.x`,
+  `id=in.(a,b)`, `indexed_at=is.null`. Match on those, not on the raw URL.
+
+### PWA checks
+
+A service worker only controls the page from the *second* load, so reload once
+before asserting `navigator.serviceWorker.controller`. The strongest single
+check is `context.setOffline(true)` then reload: the app shell must still
+render. The vault will not load offline, and is not meant to.
+
 ## What to actually check
 
 - No console or page errors (listen for `pageerror` and `console` type `error`).
@@ -76,6 +118,8 @@ flip `colorScheme`.
 - Both themes render: `colorScheme: 'dark'` and `'light'`, plus the manual
   toggle (the settings button in the ribbon).
 - Keyboard paths work, not just clicks — Pitchstone is a keyboard-first app.
+- Long lists scroll *inside* their panel and the page itself never scrolls
+  (`document.documentElement.scrollHeight - clientHeight` should be 0).
 
 ## Data
 

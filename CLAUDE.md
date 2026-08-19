@@ -1,17 +1,19 @@
 # Pitchstone — Claude Code notes
 
-New project, scaffolded as of 2026-08-19. There is **no application code yet** —
-this repo currently contains only the conventions below. Versioning, git, and
-deployment rules are carried over deliberately from Dodo (`tijamo/Dodo`), so
-switching between the two projects doesn't mean switching habits. Project
-notes (architecture, current state, gotchas) get added under their own headings
-as the app takes shape.
+A light Obsidian clone, started 2026-08-19. Versioning, git, and deployment
+rules are carried over deliberately from Dodo (`tijamo/Dodo`), so switching
+between the two projects doesn't mean switching habits.
+
+**Current state: v0.5.0.** The app is real and deployed — auth, a Supabase
+vault, a three-pane shell, a CodeMirror editor with live-preview wikilinks,
+backlinks, a force-directed graph, tags, full-text search, and an installable
+PWA. See "Where the build has got to" below for what each phase covered.
 
 ## Versioning
 
 The version lives in `package.json` `"version"` and is the single source of
-truth. The app should display it directly (e.g. `1.2.14`) once there's a UI to
-display it in.
+truth. It reaches the bundle through the `__APP_VERSION__` define in
+`vite.config.ts`, and is rendered in the status bar and on the sign-in card.
 
 **Rules:**
 
@@ -46,17 +48,18 @@ If Tim just says "release this" with no major/minor language, it's a patch.
   see it.
 - **Only ever delete local branches.** Tim removes the remote ones himself —
   don't `git push --delete` / `git push origin :branch`, and don't flag a
-  leftover merged branch on origin as something outstanding. (There is one such
-  branch on origin right now, `claude/versioning-deployment-rules-igyqxs`, fully
-  merged into `main` — leave it alone.)
+  leftover merged branch on origin as something outstanding. Several `claude/*`
+  branches sit on origin fully merged into `main`; that is the normal resting
+  state here, not a loose end. Don't list them as cleanup.
 
 ## Deployment
 
 Netlify auto-deploys on push to `main` via its native GitHub integration
 (configured in Netlify's dashboard, not from this repo). Same shape as Dodo: no
 GitHub Action does the shipping, so if deploys ever stop working, check
-Netlify's own deploy log first. Confirmed working — the first push to `main`
-(`2ad91b0`) built and published in 7s.
+Netlify's own deploy log first. Reliable so far — builds land in 7–20s. The
+site has no Lighthouse plugin configured, so deploys report
+`lighthouse: null`; don't wait for scores that aren't coming.
 
 **Site details:**
 
@@ -117,10 +120,36 @@ can read and write the same vault.
   TypeScript module imported by both, while *resolution* (title →
   `target_note_id`, including links that were unresolved until their target was
   created) lives in a SQL function.
+- **Derived data is rebuildable, not write-once.** A note's tags, frontmatter,
+  and outgoing links are extracted client-side and written by
+  `pitchstone_save_note` on every save. `indexed_at` marks whether that has
+  ever happened; anything null is caught up by a backfill pass on vault load
+  (`backfillIndex`, batched at 100). That is what makes the parser's single
+  home affordable — reindexing does not need a SQL parser, it just re-runs the
+  TypeScript one. `pitchstone_reindex_note` writes the derived data without
+  touching `content`, and the write trigger leaves `updated_at` alone when
+  neither text nor path changed, so a backfill doesn't restamp the vault.
 
-The full phase-by-phase build plan — data model, feature scope, and the version
-each phase maps to — was agreed on 2026-08-19. Each phase is a feature set, so
-each needs Tim's go-ahead for its minor bump.
+The phase-by-phase build plan was agreed with Tim in conversation on
+2026-08-19 and **is not written down anywhere in this repo** — not as a doc, an
+issue, or a PR. Don't go looking for it; ask Tim what a phase covers before
+building it. Each phase is a feature set, so each needs his go-ahead for its
+minor bump.
+
+## Where the build has got to
+
+| Version | What landed |
+| --- | --- |
+| 0.1 | App shell: ribbon, three panes, status bar, theme tokens. |
+| 0.2 | The real vault — auth, Supabase notes, the file explorer. |
+| 0.3 | CodeMirror editor: live-preview wikilinks, `[[` completion, outline. |
+| 0.4 | Phase 3 — backlinks, graph, tags, search. Then resizable panels, the graph moved to the right sidebar, and the index backfill. |
+| 0.5 | Installable PWA and the Pitchstone mark. |
+
+Phase 3 was backlinks, graph, tags, and search, and shipped as 0.4.0 — that
+much is known because Tim confirmed it directly. Which phase numbers 0.1–0.3
+correspond to was never recorded, and phases 4 and 5 are unknown here. The MCP
+server is Phase 6. Ask rather than guessing the mapping.
 
 ## What's in the repo
 
@@ -132,6 +161,9 @@ each needs Tim's go-ahead for its minor bump.
 - `.claude/skills/verify/SKILL.md` — how to build, launch, and drive the app
   locally, including the Playwright/Chromium setup gotchas.
 - `package.json` — version lives here and nowhere else.
+- `index.html` — icon links, the iOS web-app meta tags, and a `theme-color`
+  per colour scheme so OS chrome follows the theme.
+- `.env.example` — the two `VITE_` keys. Copy to `.env.local` to run locally.
 - `netlify.toml` — build command, publish dir, functions dir, SPA fallback, and
   a no-cache header on `/sw.js`.
 - `vite.config.ts` — exposes `package.json`'s version to the bundle as
@@ -144,15 +176,25 @@ each needs Tim's go-ahead for its minor bump.
 - `src/pwa.ts` — service worker registration.
 - `src/changelog.ts` — in-app changelog as plain data, newest first, keyed by
   minor version (Dodo's `{ ver, title, items }` shape).
-- `src/styles/`, `src/components/`, `src/store/` — theme tokens, the app shell,
-  and UI/auth/vault state.
+- `src/styles/` — `theme.css` (every colour, plus the light overrides) and
+  `app.css`. Sidebar widths are *not* tokens: they are resizable, so `uiStore`
+  owns them and sets them inline.
+- `src/store/` — `uiStore` (tabs, panel widths, theme), `authStore`,
+  `vaultStore` (notes, the open note, autosave, `linksVersion`).
+- `src/components/` — the shell (`Ribbon`, `LeftSidebar`, `RightSidebar`,
+  `EditorPane`, `StatusBar`, `LoginGate`), the panels (`FileTree`,
+  `SearchPanel`, `TagsPanel`, `GraphView`), `Resizer`, `Icon`, and `Mark`.
 - `src/lib/` — the Supabase client, vault path helpers (`paths.ts`), the note
   data access layer (`notes.ts`), and `markdown/parse.ts`, the shared
   extraction module (see Architecture) with its unit tests beside it.
 - `src/components/editor/` — the CodeMirror 6 editor: the wikilink syntax
   extension, the live-preview decorations, the theme, and `[[` completion.
 - `supabase/migrations/` — the applied schema, kept in the repo for the record.
-  Migrations are applied through the Supabase MCP tools, not a local CLI.
+  Migrations are applied through the Supabase MCP tools, not a local CLI, so a
+  file here is a record of a change already made — writing one does not apply
+  it.
+- `tsconfig.*.json` — `app` for the build graph, `node` for Vite's config,
+  `test` for the unit tests (deliberately outside the app's graph).
 - `.gitattributes` — LF normalization.
 
 ## Gotchas
@@ -171,6 +213,17 @@ each needs Tim's go-ahead for its minor bump.
   build outright when `NETLIFY` is set and the Supabase keys are absent. That
   keeps the last good deploy published instead of quietly shipping an app that
   cannot reach its own vault.
+- **A local build with no `.env.local` is not the build Netlify ships.** Vite
+  inlines `import.meta.env.VITE_SUPABASE_URL` as `undefined`, which makes
+  `url && anonKey ? createClient(…) : null` statically false, so Rollup
+  tree-shakes the entire Supabase client out — the main chunk comes in around
+  240 kB instead of ~460 kB. Nothing warns you. Write a throwaway `.env.local`
+  (it is gitignored) before reading bundle sizes or driving the signed-in app,
+  and don't report a local size as the shipped one.
+- **The sign-in gate is the tell.** Without those keys `isConfigured` is false
+  and the app renders "Pitchstone isn't configured" instead of the login form —
+  so a Playwright run that can't find `#email` usually means a missing
+  `.env.local`, not a broken selector.
 - **Folders are derived from paths**, not stored. A folder exists exactly as
   long as a note sits in it, so there is no such thing as an empty folder.
 - **Wikilinks are parsed twice, and the two must agree.** `lib/markdown/parse.ts`
@@ -205,3 +258,17 @@ each needs Tim's go-ahead for its minor bump.
   only, through Node's built-in runner and type stripping (`tsconfig.test.json`
   type-checks it separately — it is deliberately outside the app's build graph).
   Everything else is verified by driving the app per the `verify` skill.
+- **No git tags and no GitHub releases.** Versions live in `package.json` and
+  commit messages only, so the `version-release` skill's tag-counting maths
+  doesn't apply here — count pushes since the last minor by reading the log.
+
+## Deliberately not done
+
+Worth knowing so they don't get "fixed" by accident:
+
+- **Offline access to the vault.** The precache is the app shell; notes need
+  the network. Real offline means a sync queue and conflict handling, which is
+  a feature in its own right, not a side effect of having a service worker.
+- **Empty folders.** They cannot exist — see the gotcha above.
+- **Unlinked mentions**, clickable `#tags` inside the editor, and search over
+  tags. All plausible, none built, none promised.
