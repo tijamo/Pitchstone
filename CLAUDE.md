@@ -66,7 +66,10 @@ site has no Lighthouse plugin configured, so deploys report
 
 - Site name: `pitchstone` (Tijamo team)
 - Site ID: `900a0529-f25d-4e9b-9c2a-1112fd588547`
-- URL: https://pitchstone.netlify.app
+- URL: **https://pitchstone.app** — the primary domain. `pitchstone.netlify.app`
+  still resolves and is what earlier notes here said, but Netlify reports
+  `pitchstone.app` as the site's URL, so that is the one to quote.
+- MCP endpoint: https://pitchstone.app/mcp
 - Admin: https://app.netlify.com/projects/pitchstone
 
 **Environment variables** (set on the site, context `all`):
