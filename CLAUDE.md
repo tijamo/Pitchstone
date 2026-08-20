@@ -296,6 +296,15 @@ phases 4 and 5 are still unknown here. Ask rather than guessing the mapping.
   `anon` and `authenticated` — so `revoke ... from public` alone leaves the
   grant standing. Revoke from all three by name, and check with
   `has_function_privilege` afterwards rather than assuming.
+- **A v2 function with a custom `config.path` is not reachable at the classic
+  `/.netlify/functions/<name>` URL.** `netlify.toml` used to carry a redundant
+  `[[redirects]]` rule forwarding `/mcp` to `/.netlify/functions/mcp` "so the
+  endpoint doesn't depend on one mechanism" — but that legacy URL 404s for a
+  path-routed v2 function, and because the redirect had `force = true` it fired
+  *before* `config.path`'s own route could, so it shadowed the working route
+  with a dead one. Production served a 404 on `/mcp` for this reason until
+  v0.6.3, even though the function itself was deployed correctly. `config.path`
+  is sufficient on its own; don't re-add a redirect alongside it.
 - **Netlify treats every file in `netlify/functions/` as a function**, which is
   why the MCP server lives in `netlify/lib/mcp/` with only a route file in
   `functions/`. Its imports carry real `.ts` extensions, because Node's type
