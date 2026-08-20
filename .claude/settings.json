@@ -1,8 +1,16 @@
 {
+  "enabledMcpjsonServers": ["pitchstone"],
   "permissions": {
     "allow": [
       "mcp__Netlify__netlify-deploy-services-reader",
-      "mcp__Netlify__netlify-project-services-reader"
+      "mcp__Netlify__netlify-project-services-reader",
+      "mcp__pitchstone__vault_info",
+      "mcp__pitchstone__list_notes",
+      "mcp__pitchstone__read_note",
+      "mcp__pitchstone__search_notes",
+      "mcp__pitchstone__backlinks",
+      "mcp__pitchstone__list_tags",
+      "mcp__pitchstone__write_note"
     ]
   },
   "hooks": {

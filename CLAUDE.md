@@ -98,9 +98,11 @@ allowlisted in `.claude/settings.json` so this doesn't prompt for permission.
 
 ## Using the vault as memory
 
-Pitchstone's own MCP server is wired up in `.mcp.json`, so a session in this
-repo gets `list_notes`, `read_note`, `search_notes`, `write_note`, and the rest
-against the live vault. Two things have to be true for it to connect:
+The vault **is** the memory. Pitchstone's own MCP server is wired up in
+`.mcp.json`, so a session in this repo gets `vault_info`, `list_notes`,
+`read_note`, `search_notes`, `write_note`, `backlinks`, `list_tags`,
+`rename_note`, and `delete_note` against the live vault at
+https://pitchstone.app/mcp. Three things have to be true for it to connect:
 
 1. **`PITCHSTONE_TOKEN` is set** to a personal token — made in the app under
    Settings → Claude access, and shown only once, since only its hash is
@@ -111,8 +113,62 @@ against the live vault. Two things have to be true for it to connect:
    `request blocked: no rule or allowlist entry allows host "pitchstone.app"`
    against the server in `claude mcp list` — that is the policy talking, not a
    bad token. See https://code.claude.com/docs/en/claude-code-on-the-web.
+3. **The server is approved.** A project-scoped `.mcp.json` server needs the
+   user to approve it, and nobody is there to click anything in a web session —
+   it just sits at `⏸ Pending approval` and the tools never load, with no
+   error to explain why. `.claude/settings.json` therefore lists it under
+   `enabledMcpjsonServers`, which is the standing approval. The six read tools
+   and `write_note` are also in `permissions.allow` there, so recording
+   something doesn't interrupt anyone; `rename_note` and `delete_note`
+   deliberately still prompt.
 
 `claude mcp list` is the quick check; a working server reads `✔ Connected`.
+If it doesn't, work out which of the three is missing before assuming the
+token is bad — all three fail silently in different ways.
+
+### What goes where
+
+CLAUDE.md and the vault are not competing. **This file is the startup memory
+for this repo**: conventions, architecture, gotchas — things that are true of
+the code, reviewed in a diff, and worth reading before touching anything. The
+vault holds what a commit can't: what happened across sessions, what Tim
+decided and why, and anything that shouldn't live in a public repo. If a fact
+is about the code, it belongs here. If it's about the work, it belongs in the
+vault.
+
+### Where memory lives in the vault
+
+Everything Claude writes goes under `Memory/`, so Tim's own notes stay at the
+top level and the file tree doesn't fill up with machine minutes:
+
+| Path | What it holds |
+| --- | --- |
+| `Memory/Projects/<Project>.md` | Durable per-project facts: decisions taken, why an approach was rejected, standing preferences. Rewrite in place as things change — this is the current picture, not a log. |
+| `Memory/Sessions/YYYY-MM-DD.md` | What actually happened that day, appended to as it happens. One note per day, not per session; a second session on the same date appends to the same note. |
+
+Conventions that keep it usable:
+
+- **Tag every memory note `#memory`**, plus a project tag (`#pitchstone`,
+  `#dodo`). `list_tags` is how a cold session finds what's already there.
+- **Link, don't repeat.** A session note should say what happened and
+  `[[Pitchstone]]`-link out; the project note carries the settled version.
+- **Append, don't rewrite, session notes** — `write_note` with `mode: "append"`
+  exists exactly for this. Rewriting one loses the day's earlier entries.
+- **Search before writing.** `search_notes` first: the vault very often already
+  knows, and a second note saying the same thing is worse than none.
+- **Note titles are vault-wide.** `read_note` and `[[wikilinks]]` resolve a
+  bare title regardless of folder, so `Memory/Projects/Pitchstone.md` and a
+  top-level `Pitchstone.md` are ambiguous by title. Refer to memory notes by
+  full path, and don't reuse a title that already exists elsewhere.
+
+### At the start and end of a session
+
+Not a hook, just the habit: open with `vault_info` and a `search_notes` for
+whatever the task is about, and read `Memory/Projects/Pitchstone.md` before
+building anything. Close by appending to today's session note — what was done,
+what was decided, and anything the next session would otherwise have to
+rediscover. Something learned the hard way (a gotcha, a dead end) is worth
+writing down the moment it's learned, not at the end.
 
 ## Architecture
 
@@ -183,8 +239,10 @@ phases 4 and 5 are still unknown here. Ask rather than guessing the mapping.
 ## What's in the repo
 
 - `CLAUDE.md` — this file.
-- `.claude/settings.json` — allowlists the two read-only Netlify MCP tools so
-  deploy polling doesn't prompt, and wires the `SessionStart` hook.
+- `.claude/settings.json` — approves the `pitchstone` MCP server for every
+  session (`enabledMcpjsonServers`), allowlists the two read-only Netlify MCP
+  tools plus Pitchstone's read tools and `write_note` so deploy polling and
+  memory don't prompt, and wires the `SessionStart` hook.
 - `.mcp.json` — points Claude Code at Pitchstone's own MCP server, so a session
   in this repo can use the vault as memory. The token is **not** in the file:
   it expands from `PITCHSTONE_TOKEN`, because this repo is public. See
