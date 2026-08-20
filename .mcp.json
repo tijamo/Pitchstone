@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "pitchstone": {
+      "type": "http",
+      "url": "https://pitchstone.app/mcp",
+      "headers": {
+        "Authorization": "Bearer ${PITCHSTONE_TOKEN}"
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# The service worker must never be served from cache: a stale one keeps
+# handing out the bundle it was built with, and no amount of deploying
+# dislodges it. Netlify revalidates by default, but the worker is the one file
+# where that must not depend on a default.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# The MCP server: netlify/functions/mcp.mts declares `config.path = "/mcp"`,
+# which registers the route ahead of the SPA fallback on its own. There used
+# to be a redundant [[redirects]] rule here forwarding /mcp to the classic
+# /.netlify/functions/mcp URL, but this function is v2 path-routed and isn't
+# reachable at that legacy URL — the redirect fired first (force = true) and
+# rewrote every request to a dead endpoint, so /mcp 404'd in production while
+# config.path's own route sat unused underneath it. Removed; config.path is
+# the only routing mechanism this endpoint needs.
+
+# SPA fallback: every non-asset route is served by the app shell. Files that
+# exist on disk — sw.js and manifest.webmanifest among them — are served
+# before redirects are considered, so this does not shadow them.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

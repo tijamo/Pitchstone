@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="description"
+      content="A light Obsidian: connected markdown notes in a three-pane vault."
+    />
+
+    <!--
+      Two theme colours, so the browser and OS chrome follow the app's theme
+      instead of forcing a dark bar onto the light one. A manifest can only
+      carry a single value, hence doing it here as well.
+    -->
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#17171b" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#efeff1" />
+
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/icon.svg" color="#8875f5" />
+
+    <!-- iOS has no manifest support worth the name; these are its equivalent. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Pitchstone" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <title>Pitchstone</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

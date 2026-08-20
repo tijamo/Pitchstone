@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    // Netlify bundles the function with esbuild, which resolves imports the
+    // same way Vite does — hence "bundler" here as well as in the app.
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    // Imports here carry a real .ts extension, because these modules are run
+    // directly by Node's test runner as well as bundled by esbuild, and Node
+    // resolves ESM specifiers literally.
+    "allowImportingTsExtensions": true,
+    // No @netlify/functions: a v2 function is a Web Request in and a Web
+    // Response out, both of which @types/node already declares, and the only
+    // Netlify-specific thing here is a plain `config` object.
+    "types": ["node"]
+  },
+  "include": ["netlify"],
+  // Tests are type-checked by tsconfig.test.json, outside the shipping graph.
+  "exclude": ["netlify/**/*.test.ts"]
+}

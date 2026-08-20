@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "strict": true,
+    "types": ["node"],
+    // Node's type stripping runs these files directly, so their imports carry
+    // a real .ts extension — unlike the app's, which Vite resolves.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*.test.ts", "netlify/**/*.test.ts"]
+}

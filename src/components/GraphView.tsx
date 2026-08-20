@@ -1,0 +1,383 @@
+import { useEffect, useRef } from 'react'
+import {
+  forceCenter,
+  forceCollide,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  type Simulation,
+  type SimulationLinkDatum,
+  type SimulationNodeDatum,
+} from 'd3-force'
+import { useVaultStore } from '../store/vaultStore'
+import { listLinks } from '../lib/notes'
+import type { NoteMeta } from '../lib/notes'
+
+type GraphNode = SimulationNodeDatum & {
+  id: string
+  title: string
+  degree: number
+  /** A link target that no note answers to yet — drawn hollow. */
+  unresolved: boolean
+}
+type GraphLink = SimulationLinkDatum<GraphNode>
+
+const FONT = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 3
+
+/**
+ * Node labels are clipped to a share of the panel rather than drawn at full
+ * length: the graph shares a sidebar now, and an untruncated title runs off
+ * the edge mid-word. Measuring is cached because this runs per node per tick.
+ */
+function fitLabel(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  cache: Map<string, string>,
+): string {
+  const key = `${maxWidth}:${text}`
+  const hit = cache.get(key)
+  if (hit !== undefined) return hit
+
+  let label = text
+  if (ctx.measureText(text).width > maxWidth) {
+    let lo = 0
+    let hi = text.length
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2)
+      if (ctx.measureText(`${text.slice(0, mid)}…`).width <= maxWidth) lo = mid
+      else hi = mid - 1
+    }
+    label = lo > 0 ? `${text.slice(0, lo)}…` : ''
+  }
+  cache.set(key, label)
+  return label
+}
+
+export function GraphView() {
+  const notes = useVaultStore((s) => s.notes)
+
+  if (notes.length === 0) {
+    return (
+      <div className="empty empty--pane">
+        <span className="empty__title">Nothing to plot</span>
+        <span className="empty__hint">
+          Once notes link to each other, the graph shows how they connect.
+        </span>
+      </div>
+    )
+  }
+
+  return <GraphCanvas notes={notes} />
+}
+
+function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
+  const activeId = useVaultStore((s) => s.activeId)
+  const open = useVaultStore((s) => s.open)
+  const openOrCreate = useVaultStore((s) => s.openOrCreate)
+  const linksVersion = useVaultStore((s) => s.linksVersion)
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const activeIdRef = useRef(activeId)
+  activeIdRef.current = activeId
+
+  const nodesRef = useRef<GraphNode[]>([])
+  const linksRef = useRef<GraphLink[]>([])
+  const sizeRef = useRef({ width: 0, height: 0 })
+  const transformRef = useRef({ x: 0, y: 0, k: 1 })
+  const dragRef = useRef<{ node: GraphNode; moved: boolean } | null>(null)
+  const panRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null)
+  const simRef = useRef<Simulation<GraphNode, GraphLink> | null>(null)
+
+  const noteIds = notes
+    .map((n) => n.id)
+    .sort()
+    .join(',')
+
+  useEffect(() => {
+    const container = containerRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!container || !canvas || !ctx) return
+
+    let cancelled = false
+    const labelCache = new Map<string, string>()
+
+    function project(x: number, y: number) {
+      const t = transformRef.current
+      return { x: x * t.k + t.x, y: y * t.k + t.y }
+    }
+
+    function radiusOf(node: GraphNode) {
+      return (4 + Math.min(node.degree, 8)) * Math.min(transformRef.current.k, 1.4)
+    }
+
+    function nodeAt(sx: number, sy: number): GraphNode | null {
+      let found: GraphNode | null = null
+      let best = Infinity
+      for (const node of nodesRef.current) {
+        if (node.x == null || node.y == null) continue
+        const p = project(node.x, node.y)
+        const d = Math.hypot(p.x - sx, p.y - sy)
+        if (d <= radiusOf(node) + 3 && d < best) {
+          best = d
+          found = node
+        }
+      }
+      return found
+    }
+
+    function draw() {
+      const { width, height } = sizeRef.current
+      ctx!.clearRect(0, 0, width, height)
+
+      const styles = getComputedStyle(container!)
+      const lineColor = styles.getPropertyValue('--border-strong').trim()
+      const nodeColor = styles.getPropertyValue('--text-faint').trim()
+      const labelColor = styles.getPropertyValue('--text-muted').trim()
+      const accent = styles.getPropertyValue('--accent').trim()
+      const unresolvedColor = styles.getPropertyValue('--link-unresolved').trim()
+
+      ctx!.strokeStyle = lineColor
+      ctx!.lineWidth = 1
+      for (const link of linksRef.current) {
+        const s = link.source as GraphNode
+        const t = link.target as GraphNode
+        if (s.x == null || t.x == null || s.y == null || t.y == null) continue
+        const p1 = project(s.x, s.y)
+        const p2 = project(t.x, t.y)
+        ctx!.beginPath()
+        ctx!.moveTo(p1.x, p1.y)
+        ctx!.lineTo(p2.x, p2.y)
+        ctx!.stroke()
+      }
+
+      ctx!.font = FONT
+      ctx!.textBaseline = 'middle'
+      // Rounded to a step so a drag-resize reuses cache entries instead of
+      // measuring every title afresh at every intermediate pixel width.
+      const maxLabel = Math.max(60, Math.round((width * 0.4) / 20) * 20)
+      for (const node of nodesRef.current) {
+        if (node.x == null || node.y == null) continue
+        const p = project(node.x, node.y)
+        const r = radiusOf(node)
+        const isActive = node.id === activeIdRef.current
+
+        ctx!.beginPath()
+        ctx!.arc(p.x, p.y, r, 0, Math.PI * 2)
+        if (node.unresolved) {
+          // Hollow, the way an unresolved wikilink reads in the editor: the
+          // note is named but not yet written.
+          ctx!.strokeStyle = unresolvedColor
+          ctx!.lineWidth = 1.5
+          ctx!.stroke()
+          ctx!.lineWidth = 1
+        } else {
+          ctx!.fillStyle = isActive ? accent : nodeColor
+          ctx!.fill()
+        }
+
+        ctx!.fillStyle = node.unresolved
+          ? unresolvedColor
+          : isActive
+            ? accent
+            : labelColor
+        ctx!.fillText(fitLabel(ctx!, node.title, maxLabel, labelCache), p.x + r + 4, p.y)
+      }
+    }
+
+    function resize() {
+      const width = container!.clientWidth
+      const height = container!.clientHeight
+      sizeRef.current = { width, height }
+      const dpr = window.devicePixelRatio || 1
+      canvas!.width = width * dpr
+      canvas!.height = height * dpr
+      canvas!.style.width = `${width}px`
+      canvas!.style.height = `${height}px`
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0)
+      draw()
+    }
+
+    const resizeObserver = new ResizeObserver(resize)
+    resizeObserver.observe(container)
+
+    listLinks().then((edges) => {
+      if (cancelled) return
+
+      // A link whose target does not exist yet still belongs on the graph —
+      // that is why the schema keeps it. Every such link naming the same title
+      // shares one placeholder node, keyed by the title rather than an id.
+      const placeholderId = (title: string) => `unresolved:${title.toLowerCase()}`
+      const byNoteId = new Map(notes.map((n) => [n.id, n]))
+
+      const endpoints = edges
+        .filter((e) => byNoteId.has(e.source_note_id))
+        .map((e) => ({
+          from: e.source_note_id,
+          to: e.target_note_id ?? placeholderId(e.target_title),
+          title: e.target_title,
+          resolved: e.target_note_id != null,
+        }))
+        // A link out to a note that has since been deleted resolves to
+        // nothing and names nothing useful; drop it rather than plot it.
+        .filter((e) => !e.resolved || byNoteId.has(e.to))
+
+      const degree = new Map<string, number>()
+      for (const e of endpoints) {
+        degree.set(e.from, (degree.get(e.from) ?? 0) + 1)
+        degree.set(e.to, (degree.get(e.to) ?? 0) + 1)
+      }
+
+      const nodes: GraphNode[] = notes.map((n) => ({
+        id: n.id,
+        title: n.title,
+        degree: degree.get(n.id) ?? 0,
+        unresolved: false,
+      }))
+      const seen = new Set(nodes.map((n) => n.id))
+      for (const e of endpoints) {
+        if (e.resolved || seen.has(e.to)) continue
+        seen.add(e.to)
+        nodes.push({ id: e.to, title: e.title, degree: degree.get(e.to) ?? 0, unresolved: true })
+      }
+
+      // Carry positions over from the previous layout so a refresh — a save
+      // that changed one link — nudges the graph rather than reshuffling it.
+      const previous = new Map(nodesRef.current.map((n) => [n.id, n]))
+      let carried = 0
+      for (const node of nodes) {
+        const old = previous.get(node.id)
+        if (!old || old.x == null) continue
+        node.x = old.x
+        node.y = old.y
+        node.vx = old.vx
+        node.vy = old.vy
+        carried++
+      }
+
+      const links: GraphLink[] = endpoints.map((e) => ({ source: e.from, target: e.to }))
+      nodesRef.current = nodes
+      linksRef.current = links
+
+      const { width, height } = sizeRef.current
+      simRef.current?.stop()
+      simRef.current = forceSimulation(nodes)
+        .force('charge', forceManyBody().strength(-140))
+        .force(
+          'link',
+          forceLink<GraphNode, GraphLink>(links)
+            .id((d) => d.id)
+            .distance(56),
+        )
+        .force('center', forceCenter(width / 2, height / 2))
+        .force('collide', forceCollide<GraphNode>((d) => radiusOf(d) + 6))
+        .on('tick', draw)
+        // A first layout needs the full run; a refresh of a graph already on
+        // screen only needs to settle the part that moved.
+        .alpha(carried > 0 ? 0.25 : 1)
+        .restart()
+
+      resize()
+    })
+
+    function toWorld(sx: number, sy: number) {
+      const t = transformRef.current
+      return { x: (sx - t.x) / t.k, y: (sy - t.y) / t.k }
+    }
+
+    function handlePointerDown(e: PointerEvent) {
+      canvas!.setPointerCapture(e.pointerId)
+      const rect = canvas!.getBoundingClientRect()
+      const sx = e.clientX - rect.left
+      const sy = e.clientY - rect.top
+      const node = nodeAt(sx, sy)
+      if (node) {
+        node.fx = node.x
+        node.fy = node.y
+        dragRef.current = { node, moved: false }
+        simRef.current?.alphaTarget(0.3).restart()
+      } else {
+        const t = transformRef.current
+        panRef.current = { x: sx, y: sy, tx: t.x, ty: t.y }
+      }
+    }
+
+    function handlePointerMove(e: PointerEvent) {
+      const rect = canvas!.getBoundingClientRect()
+      const sx = e.clientX - rect.left
+      const sy = e.clientY - rect.top
+
+      if (dragRef.current) {
+        const world = toWorld(sx, sy)
+        dragRef.current.node.fx = world.x
+        dragRef.current.node.fy = world.y
+        dragRef.current.moved = true
+        draw()
+      } else if (panRef.current) {
+        const p = panRef.current
+        transformRef.current = { ...transformRef.current, x: p.tx + (sx - p.x), y: p.ty + (sy - p.y) }
+        draw()
+      }
+    }
+
+    function handlePointerUp() {
+      const drag = dragRef.current
+      if (drag) {
+        drag.node.fx = null
+        drag.node.fy = null
+        simRef.current?.alphaTarget(0)
+        if (!drag.moved) {
+          // Clicking a placeholder writes the note it stands for, which is
+          // what following the wikilink itself would have done.
+          if (drag.node.unresolved) void openOrCreate(drag.node.title)
+          else void open(drag.node.id)
+        }
+        dragRef.current = null
+      }
+      panRef.current = null
+    }
+
+    function handleWheel(e: WheelEvent) {
+      e.preventDefault()
+      const rect = canvas!.getBoundingClientRect()
+      const sx = e.clientX - rect.left
+      const sy = e.clientY - rect.top
+      const t = transformRef.current
+      const factor = Math.exp(-e.deltaY * 0.001)
+      const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, t.k * factor))
+      const world = toWorld(sx, sy)
+      transformRef.current = { k, x: sx - world.x * k, y: sy - world.y * k }
+      draw()
+    }
+
+    canvas.addEventListener('pointerdown', handlePointerDown)
+    canvas.addEventListener('pointermove', handlePointerMove)
+    canvas.addEventListener('pointerup', handlePointerUp)
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      cancelled = true
+      resizeObserver.disconnect()
+      simRef.current?.stop()
+      canvas.removeEventListener('pointerdown', handlePointerDown)
+      canvas.removeEventListener('pointermove', handlePointerMove)
+      canvas.removeEventListener('pointerup', handlePointerUp)
+      canvas.removeEventListener('wheel', handleWheel)
+    }
+    // Re-run when the set of notes changes, and when anything may have
+    // rewritten the link table — adding a [[link]] to an existing note leaves
+    // every note id untouched, so noteIds alone would never notice. The
+    // active note is picked up live via the refs above instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noteIds, linksVersion])
+
+  return (
+    <div ref={containerRef} className="graph-view">
+      <canvas ref={canvasRef} className="graph-view__canvas" />
+    </div>
+  )
+}

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!--
+    Pitchstone's mark: a cut stone. Pitchstone is volcanic glass, so the shape
+    is a faceted shard rather than a rounded gem, and the three facets are one
+    triangle each from the apex — they tile the silhouette exactly, which is
+    what keeps the shape readable when this is 16px in a browser tab.
+
+    This is the master. icon-maskable.svg is the same mark on a full-bleed
+    ground for Android's mask; every PNG is rendered from one of the two.
+  -->
+  <defs>
+    <linearGradient id="centre" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#c9befd"/>
+      <stop offset="1" stop-color="#8875f5"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8875f5"/>
+      <stop offset="1" stop-color="#6c56e8"/>
+    </linearGradient>
+    <linearGradient id="left" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6c56e8"/>
+      <stop offset="1" stop-color="#4632ad"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="114" fill="#17171b"/>
+
+  <!--
+    Facets, left to right. Apex (256,67); base corners (190,445)/(322,445).
+    The mark sits larger here than in the maskable variant on purpose: nothing
+    crops this one, and at 16px in a tab every pixel of it counts.
+  -->
+  <path d="M256 67 115 210 190 445Z" fill="url(#left)"/>
+  <path d="M256 67 190 445 322 445Z" fill="url(#centre)"/>
+  <path d="M256 67 322 445 397 210Z" fill="url(#right)"/>
+
+  <!-- A single specular edge, so the stone reads as glass and not as paper. -->
+  <path d="M256 67 115 210 256 137Z" fill="#ffffff" opacity="0.18"/>
+</svg>
