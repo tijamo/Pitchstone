@@ -222,19 +222,23 @@ minor bump.
 
 ## Where the build has got to
 
-| Version | What landed |
-| --- | --- |
-| 0.1 | App shell: ribbon, three panes, status bar, theme tokens. |
-| 0.2 | The real vault — auth, Supabase notes, the file explorer. |
-| 0.3 | CodeMirror editor: live-preview wikilinks, `[[` completion, outline. |
-| 0.4 | Phase 3 — backlinks, graph, tags, search. Then resizable panels, the graph moved to the right sidebar, and the index backfill. |
-| 0.5 | Installable PWA and the Pitchstone mark. |
-| 0.6 | Phase 6 — the MCP server at `/mcp`, personal tokens, and a settings dialog. |
+| Version | Phase | What landed |
+| --- | --- | --- |
+| 0.1 | 1 | App shell: ribbon, three panes, status bar, theme tokens. |
+| 0.2 | 1 | The real vault — auth, Supabase notes, the file explorer. |
+| 0.3 | 2 | CodeMirror editor: live-preview wikilinks, `[[` completion, outline. |
+| 0.4 | 3 | Backlinks, graph, tags, search. Then resizable panels, the graph moved to the right sidebar, and the index backfill. |
+| 0.5 | ? | Installable PWA and the Pitchstone mark. |
+| 0.6 | 6 | The MCP server at `/mcp`, personal tokens, and a settings dialog. |
 
-Phase 3 was backlinks, graph, tags, and search, and shipped as 0.4.0; Phase 6
-was the MCP server and shipped as 0.6.0 — both known because Tim said so
-directly. Which phase numbers 0.1–0.3 correspond to was never recorded, and
-phases 4 and 5 are still unknown here. Ask rather than guessing the mapping.
+**A phase is not a version**, which is what made this confusing: phase 1 —
+"initial data and UI setup" — shipped as both 0.1 and 0.2, so the columns
+don't line up one to one. Phase 2 was editing capability (0.3) and phase 3 was
+wikilinks and tags (0.4); Tim gave that mapping on 2026-08-20, and phases 3
+and 6 were already known from him directly.
+
+**Phases 4 and 5 are still unrecorded**, as is which phase 0.5 belonged to.
+Ask rather than guessing, and write the answer down here when you get it.
 
 ## What's in the repo
 
