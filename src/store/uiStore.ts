@@ -56,7 +56,9 @@ type UiState = {
 
 export const useUiStore = create<UiState>((set) => ({
   leftTab: 'files',
-  rightTab: 'backlinks',
+  // The graph is the most useful thing to land on: it shows the whole vault
+  // rather than one note's neighbours, and backlinks are one click away.
+  rightTab: 'graph',
   leftOpen: true,
   rightOpen: true,
   leftWidth: storedWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT_WIDTH),
