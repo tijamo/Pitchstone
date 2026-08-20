@@ -11,6 +11,17 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.7',
+    title: 'Pitchstone on a phone',
+    items: [
+      'A real mobile layout. Below 700px the three panes fold to one: the note fills the screen, and the file tree, search, tags, backlinks, outline, and graph become drawers you pull over it.',
+      'The ribbon moves to the bottom, where a thumb can reach it. Tapping a panel’s button again puts it away.',
+      'Opening a note closes the drawer you opened it from, so you land on the note rather than on the list.',
+      'Everything is still there — nothing is desktop-only. The status bar is the one thing that goes, and the answer it was carrying (whether your note is saved) moves up into the header.',
+      'Installed on a phone, the app now fits around the notch and the home indicator instead of behind them.',
+    ],
+  },
+  {
     ver: '0.6',
     title: 'Claude can use your vault',
     items: [

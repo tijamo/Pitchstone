@@ -13,23 +13,31 @@ function countWords(text: string): number {
   return matches ? matches.length : 0
 }
 
+/**
+ * Whether the open note is saved. Its home is the status bar, but the status
+ * bar is one of the things a phone screen cannot afford — so on mobile the
+ * editor header borrows this rather than leaving the question unanswered.
+ */
+export function SaveIndicator() {
+  const saveStatus = useVaultStore((s) => s.saveStatus)
+  const saveLabel = SAVE_LABEL[saveStatus]
+  if (!saveLabel) return null
+
+  return (
+    <span className={`statusbar__item${saveStatus === 'error' ? ' statusbar__item--error' : ''}`}>
+      {saveLabel}
+    </span>
+  )
+}
+
 export function StatusBar() {
   const notes = useVaultStore((s) => s.notes)
   const content = useVaultStore((s) => s.content)
   const activeId = useVaultStore((s) => s.activeId)
-  const saveStatus = useVaultStore((s) => s.saveStatus)
-
-  const saveLabel = SAVE_LABEL[saveStatus]
 
   return (
     <footer className="statusbar">
-      {saveLabel && (
-        <span
-          className={`statusbar__item${saveStatus === 'error' ? ' statusbar__item--error' : ''}`}
-        >
-          {saveLabel}
-        </span>
-      )}
+      <SaveIndicator />
       <span className="statusbar__item">
         {notes.length} {notes.length === 1 ? 'note' : 'notes'}
       </span>

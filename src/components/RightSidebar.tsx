@@ -17,6 +17,7 @@ export function RightSidebar() {
   const rightTab = useUiStore((s) => s.rightTab)
   const rightOpen = useUiStore((s) => s.rightOpen)
   const rightWidth = useUiStore((s) => s.rightWidth)
+  const mobile = useUiStore((s) => s.mobile)
   const setRightTab = useUiStore((s) => s.setRightTab)
 
   const content = useVaultStore((s) => s.content)
@@ -55,10 +56,13 @@ export function RightSidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rightTab, activeId, activeTitle, saveStatus === 'saved'])
 
+  // See LeftSidebar: on mobile the drawer's width belongs to the stylesheet.
+  const width = mobile ? undefined : { width: rightOpen ? rightWidth : 0 }
+
   return (
     <aside
       className={`sidebar sidebar--right${rightOpen ? '' : ' sidebar--collapsed'}`}
-      style={{ width: rightOpen ? rightWidth : 0 }}
+      style={width}
       aria-hidden={!rightOpen}
     >
       <div className="sidebar__tabs" role="tablist">
@@ -150,7 +154,7 @@ export function RightSidebar() {
         </div>
       )}
 
-      {rightOpen && <Resizer side="right" />}
+      {rightOpen && !mobile && <Resizer side="right" />}
     </aside>
   )
 }

@@ -6,12 +6,23 @@ import { RightSidebar } from './components/RightSidebar'
 import { StatusBar } from './components/StatusBar'
 import { LoginGate } from './components/LoginGate'
 import { SettingsModal } from './components/SettingsModal'
-import { useUiStore } from './store/uiStore'
+import { useUiStore, MOBILE_BREAKPOINT } from './store/uiStore'
 import { useAuthStore } from './store/authStore'
 import { useVaultStore } from './store/vaultStore'
 
 export function App() {
   const theme = useUiStore((s) => s.theme)
+  const setMobile = useUiStore((s) => s.setMobile)
+
+  // The breakpoint is watched rather than measured once, so rotating a phone
+  // or dragging a desktop window narrow rearranges the shell as it happens.
+  useEffect(() => {
+    const query = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
+    const sync = () => setMobile(query.matches)
+    sync()
+    query.addEventListener('change', sync)
+    return () => query.removeEventListener('change', sync)
+  }, [setMobile])
 
   // No stored preference means "follow the OS", which the CSS handles on its
   // own — so the attribute is removed rather than set to a resolved value.
@@ -30,6 +41,11 @@ export function App() {
 
 function Vault() {
   const userId = useAuthStore((s) => s.session?.user.id)
+  const mobile = useUiStore((s) => s.mobile)
+  const leftOpen = useUiStore((s) => s.leftOpen)
+  const rightOpen = useUiStore((s) => s.rightOpen)
+  const closePanels = useUiStore((s) => s.closePanels)
+  const activeId = useVaultStore((s) => s.activeId)
   const load = useVaultStore((s) => s.load)
   const reset = useVaultStore((s) => s.reset)
   const flush = useVaultStore((s) => s.flush)
@@ -42,6 +58,14 @@ function Vault() {
     reset()
     void load()
   }, [userId, load, reset])
+
+  // On a phone the panels are drawers over the editor, so opening a note has
+  // to put them away — otherwise the note you just picked is behind the list
+  // you picked it from. Watching activeId covers every route to a note at
+  // once: the file tree, search, tags, a backlink, the graph, and creation.
+  useEffect(() => {
+    if (mobile && activeId) closePanels()
+  }, [mobile, activeId, closePanels])
 
   // A queued autosave would otherwise be lost on a close or reload.
   useEffect(() => {
@@ -60,6 +84,9 @@ function Vault() {
       <EditorPane />
       <RightSidebar />
       <StatusBar />
+      {mobile && (leftOpen || rightOpen) && (
+        <button className="scrim" aria-label="Close panel" onClick={closePanels} />
+      )}
       <SettingsModal />
       {error && (
         <div className="toast" role="alert">

@@ -1004,3 +1004,183 @@ button {
 .token-list__row .tree__action {
   display: grid;
 }
+
+/* ---------- Mobile ---------- */
+
+/*
+ * Below MOBILE_BREAKPOINT (uiStore, which has to agree with the width here)
+ * the three panes fold to one: the editor fills the screen, the sidebars
+ * become drawers over it, and the ribbon moves to the bottom where a thumb
+ * can reach it. Nothing is dropped except the status bar, whose one urgent
+ * item — whether the note is saved — moves into the editor header.
+ */
+@media (max-width: 700px) {
+  body {
+    /* No rubber-banding the whole app when a pane is scrolled to its end, and
+       no pull-to-refresh reloading a note mid-edit. */
+    overscroll-behavior: none;
+  }
+
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+      'main'
+      'ribbon';
+    /* dvh, not vh: a phone browser's URL bar would otherwise put the bottom
+       bar under the fold until the page is scrolled. */
+    height: 100dvh;
+    /* A closed drawer is parked outside the shell, and body's own
+       overflow:hidden does not clip it — that value propagates to the viewport
+       and leaves the body box visible, so the drawer widens the page and the
+       browser shrinks the whole layout to fit. Clipping here is what keeps the
+       app at 1× on a phone. */
+    overflow: hidden;
+  }
+
+  .ribbon {
+    flex-direction: row;
+    gap: 4px;
+    padding: 5px 10px;
+    padding-bottom: calc(5px + env(safe-area-inset-bottom));
+    border-right: none;
+    border-top: 1px solid var(--border);
+  }
+
+  /* A touch target, rather than a cursor target. */
+  .icon-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .statusbar {
+    display: none;
+  }
+
+  /* iOS runs an installed app under the status bar, so the header and the
+     drawers below both have to pad past it. */
+  .tabbar {
+    height: calc(44px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .tabbar .statusbar__item {
+    padding: 0 6px;
+    color: var(--text-faint);
+    font-size: 11px;
+  }
+
+  /*
+   * The drawers sit in the main grid area, so they cover the editor exactly
+   * and stop short of the ribbon — the bottom bar stays live while a drawer
+   * is open, which is what makes switching between them one tap. Closed, they
+   * slide off their own edge; visibility follows the transition so a shut
+   * drawer cannot be tabbed into.
+   */
+  .sidebar {
+    grid-area: main;
+    z-index: 15;
+    width: min(84vw, 320px);
+    box-shadow: 0 0 28px rgb(0 0 0 / 0.32);
+    transition:
+      transform 180ms ease,
+      visibility 0s linear 0s;
+  }
+
+  .sidebar--left {
+    justify-self: start;
+  }
+
+  .sidebar--right {
+    justify-self: end;
+  }
+
+  .sidebar--collapsed {
+    visibility: hidden;
+    transition:
+      transform 180ms ease,
+      visibility 0s linear 180ms;
+  }
+
+  .sidebar--left.sidebar--collapsed {
+    transform: translateX(-100%);
+  }
+
+  .sidebar--right.sidebar--collapsed {
+    transform: translateX(100%);
+  }
+
+  .sidebar__tabs {
+    padding: calc(8px + env(safe-area-inset-top)) 8px 0;
+  }
+
+  .sidebar__tab {
+    padding: 7px 11px;
+    font-size: 13px;
+  }
+
+  .tree__label,
+  .outline__item,
+  .tags-panel__tag,
+  .backlinks__item,
+  .search-panel__result {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  /* Row actions are hover-revealed on a desktop, and hover does not exist
+     here — so rename and delete are simply always on the row. */
+  .tree__action {
+    display: grid;
+  }
+
+  .scrim {
+    grid-area: main;
+    z-index: 14;
+    width: 100%;
+    height: 100%;
+    background: rgb(0 0 0 / 0.4);
+    cursor: default;
+  }
+
+  .editor {
+    padding: 18px 0;
+  }
+
+  .editor__inner {
+    padding: 0 18px;
+  }
+
+  /* iOS zooms the page when a focused input's text is under 16px, and never
+     zooms back out. Every field the app can focus is therefore 16px here. */
+  .search-panel__input,
+  .gate__input,
+  .tree__rename {
+    font-size: 16px;
+  }
+
+  .toast {
+    right: 12px;
+    left: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    max-width: none;
+  }
+
+  .modal {
+    padding: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .gate__card {
+    width: min(360px, calc(100vw - 32px));
+    padding: 24px 20px;
+  }
+}
+
+/* A drawer that slides is a nicety; one that respects a reduced-motion
+   preference is not optional. */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+}

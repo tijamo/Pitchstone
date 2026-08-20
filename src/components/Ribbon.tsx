@@ -17,10 +17,22 @@ export function Ribbon() {
   const setLeftTab = useUiStore((s) => s.setLeftTab)
   const setRightTab = useUiStore((s) => s.setRightTab)
   const setSettingsOpen = useUiStore((s) => s.setSettingsOpen)
+  const mobile = useUiStore((s) => s.mobile)
+  const toggleLeft = useUiStore((s) => s.toggleLeft)
+  const toggleRight = useUiStore((s) => s.toggleRight)
   const create = useVaultStore((s) => s.create)
   const signOut = useAuthStore((s) => s.signOut)
 
   const graphOpen = rightOpen && rightTab === 'graph'
+
+  // On a phone a panel covers the screen, so the button that opened it is the
+  // obvious thing to press to put it away again. On a desktop the panel sits
+  // beside the editor and hiding it is the tabbar's job, so tapping a tab
+  // there keeps meaning "show me this".
+  const showLeft = (tab: LeftTab) => {
+    if (mobile && leftOpen && leftTab === tab) toggleLeft()
+    else setLeftTab(tab)
+  }
 
   return (
     <nav className="ribbon" aria-label="Primary">
@@ -42,7 +54,7 @@ export function Ribbon() {
           title={label}
           aria-label={label}
           aria-pressed={leftOpen && leftTab === tab}
-          onClick={() => setLeftTab(tab)}
+          onClick={() => showLeft(tab)}
         >
           <Icon name={icon} />
         </button>
@@ -55,7 +67,7 @@ export function Ribbon() {
         title="Graph view"
         aria-label="Graph view"
         aria-pressed={graphOpen}
-        onClick={() => setRightTab('graph')}
+        onClick={() => (mobile && graphOpen ? toggleRight() : setRightTab('graph'))}
       >
         <Icon name="graph" />
       </button>

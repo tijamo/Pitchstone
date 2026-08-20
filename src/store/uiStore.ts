@@ -16,6 +16,18 @@ const RIGHT_WIDTH_KEY = 'pitchstone:rightWidth'
 export const DEFAULT_LEFT_WIDTH = 260
 export const DEFAULT_RIGHT_WIDTH = 320
 
+/**
+ * Below this width the shell folds to a single pane: the sidebars become
+ * drawers over the editor and the ribbon becomes a bottom bar. It is a token
+ * in two places — here and the `@media` block in app.css — because layout is
+ * CSS's job and behaviour is the store's, and the two have to agree.
+ */
+export const MOBILE_BREAKPOINT = 700
+
+export function isMobileWidth(): boolean {
+  return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches
+}
+
 /** Narrow enough to be worth keeping, wide enough to still leave an editor. */
 export const MIN_PANEL_WIDTH = 180
 export const MAX_PANEL_WIDTH = 560
@@ -35,6 +47,8 @@ function storedWidth(key: string, fallback: number): number {
 }
 
 type UiState = {
+  /** True while the viewport is phone-sized; see MOBILE_BREAKPOINT. */
+  mobile: boolean
   leftTab: LeftTab
   rightTab: RightTab
   leftOpen: boolean
@@ -52,26 +66,51 @@ type UiState = {
   setRightWidth: (width: number) => void
   setTheme: (theme: Theme | null) => void
   setSettingsOpen: (open: boolean) => void
+  setMobile: (mobile: boolean) => void
+  closePanels: () => void
 }
 
+// Both sidebars start open on a desktop and closed on a phone, where they are
+// drawers over the editor rather than columns beside it.
+const startMobile = isMobileWidth()
+
 export const useUiStore = create<UiState>((set) => ({
+  mobile: startMobile,
   leftTab: 'files',
   // The graph is the most useful thing to land on: it shows the whole vault
   // rather than one note's neighbours, and backlinks are one click away.
   rightTab: 'graph',
-  leftOpen: true,
-  rightOpen: true,
+  leftOpen: !startMobile,
+  rightOpen: !startMobile,
   leftWidth: storedWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT_WIDTH),
   rightWidth: storedWidth(RIGHT_WIDTH_KEY, DEFAULT_RIGHT_WIDTH),
   theme: storedTheme(),
   settingsOpen: false,
 
   // Selecting a tab also reveals the sidebar if it was collapsed, so the ribbon
-  // buttons always do something visible.
-  setLeftTab: (leftTab) => set({ leftTab, leftOpen: true }),
-  setRightTab: (rightTab) => set({ rightTab, rightOpen: true }),
-  toggleLeft: () => set((s) => ({ leftOpen: !s.leftOpen })),
-  toggleRight: () => set((s) => ({ rightOpen: !s.rightOpen })),
+  // buttons always do something visible. On a phone the two panels are drawers
+  // over the same screen, so opening one closes the other rather than stacking.
+  setLeftTab: (leftTab) =>
+    set((s) => ({ leftTab, leftOpen: true, rightOpen: s.mobile ? false : s.rightOpen })),
+  setRightTab: (rightTab) =>
+    set((s) => ({ rightTab, rightOpen: true, leftOpen: s.mobile ? false : s.leftOpen })),
+  toggleLeft: () =>
+    set((s) => ({
+      leftOpen: !s.leftOpen,
+      rightOpen: s.mobile && !s.leftOpen ? false : s.rightOpen,
+    })),
+  toggleRight: () =>
+    set((s) => ({
+      rightOpen: !s.rightOpen,
+      leftOpen: s.mobile && !s.rightOpen ? false : s.leftOpen,
+    })),
+
+  // Crossing the breakpoint resets both panels to what that layout expects:
+  // open beside the editor on a desktop, out of the way on a phone.
+  setMobile: (mobile) =>
+    set((s) => (s.mobile === mobile ? {} : { mobile, leftOpen: !mobile, rightOpen: !mobile })),
+
+  closePanels: () => set({ leftOpen: false, rightOpen: false }),
 
   setLeftWidth: (width) => {
     const leftWidth = clampWidth(width)

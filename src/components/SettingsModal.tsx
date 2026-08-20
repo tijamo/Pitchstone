@@ -47,6 +47,7 @@ export function SettingsModal() {
 
         <Appearance />
         <ClaudeAccess />
+        <About />
       </div>
     </div>
   )
@@ -225,5 +226,23 @@ function Copyable({ value, label, mono }: { value: string; label: string; mono?:
         {copied ? 'Copied' : <Icon name="copy" size={14} />}
       </button>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * The version is otherwise only in the status bar, which the mobile layout
+ * hides — and "which version am I on" is exactly the question you have on the
+ * phone that is misbehaving.
+ */
+function About() {
+  return (
+    <section className="modal__section">
+      <h3 className="modal__heading">About</h3>
+      <p className="modal__note modal__note--faint">
+        Pitchstone <span className="statusbar__version">v{__APP_VERSION__}</span>
+      </p>
+    </section>
   )
 }

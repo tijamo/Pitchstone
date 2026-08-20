@@ -199,6 +199,13 @@ can read and write the same vault.
   from it, so a user id is never something a caller supplies. That is why every
   MCP operation is its own SQL function rather than a query in TypeScript — the
   narrow door is the security model.
+- **Responsive layout** has one breakpoint, 700px, and it is written down
+  twice on purpose: `MOBILE_BREAKPOINT` in `uiStore` and the `@media` block at
+  the end of `app.css`. Layout is the stylesheet's job — the shell's grid, the
+  drawers, the bottom ribbon — while *behaviour* that changes with it is the
+  store's: which panels start open, that opening one drawer closes the other,
+  and that opening a note puts the drawer away. `App` watches the media query
+  and calls `setMobile`, so the two never disagree for longer than a frame.
 - **Link handling** deliberately splits in two so the app and the MCP server can
   never drift: *extraction* of `[[wikilinks]]` and `#tags` lives in one shared
   TypeScript module imported by both, while *resolution* (title →
@@ -230,6 +237,7 @@ minor bump.
 | 0.4 | 3 | Backlinks, graph, tags, search. Then resizable panels, the graph moved to the right sidebar, and the index backfill. |
 | 0.5 | ? | Installable PWA and the Pitchstone mark. |
 | 0.6 | 6 | The MCP server at `/mcp`, personal tokens, and a settings dialog. |
+| 0.7 | ? | The mobile layout: one pane, drawer sidebars, a bottom ribbon. |
 
 **A phase is not a version**, which is what made this confusing: phase 1 —
 "initial data and UI setup" — shipped as both 0.1 and 0.2, so the columns
@@ -280,9 +288,11 @@ Ask rather than guessing, and write the answer down here when you get it.
 - `src/changelog.ts` — in-app changelog as plain data, newest first, keyed by
   minor version (Dodo's `{ ver, title, items }` shape).
 - `src/styles/` — `theme.css` (every colour, plus the light overrides) and
-  `app.css`. Sidebar widths are *not* tokens: they are resizable, so `uiStore`
+  `app.css`, whose last section is the one `@media` block that folds the shell
+  to a single pane on a phone. Sidebar widths are *not* tokens: they are resizable, so `uiStore`
   owns them and sets them inline.
-- `src/store/` — `uiStore` (tabs, panel widths, theme), `authStore`,
+- `src/store/` — `uiStore` (tabs, panel widths, theme, the mobile flag),
+  `authStore`,
   `vaultStore` (notes, the open note, autosave, `linksVersion`).
 - `src/components/` — the shell (`Ribbon`, `LeftSidebar`, `RightSidebar`,
   `EditorPane`, `StatusBar`, `LoginGate`), the panels (`FileTree`,
@@ -380,6 +390,15 @@ Ask rather than guessing, and write the answer down here when you get it.
   `parseFrontmatter` before the write, exactly as `saveContent` does. If a note
   ever arrives in the vault with no tags, suspect a write path that skipped
   that step rather than the parser.
+- **A closed drawer parked off-screen will zoom the whole page out on a
+  phone.** `body { overflow: hidden }` does not clip it: that value propagates
+  to the viewport and leaves the body box itself `visible`, so a sidebar
+  translated to `-100%` still counts towards the document's width, and mobile
+  Chromium/Safari answer an over-wide document by shrinking the layout to fit
+  — the app renders at about 0.54×, with `innerWidth` reading 725 on a 390px
+  screen. The fix is `overflow: hidden` on `.shell` itself. Check
+  `window.innerWidth` against the device width when a phone layout looks
+  oddly small; nothing else reports this.
 - **`@codemirror/lang-markdown` drags in the HTML, JavaScript, and CSS modes**,
   which is larger than the rest of the app put together. The editor is therefore
   lazy-loaded, and `components/editor/editorHandle.ts` deliberately imports

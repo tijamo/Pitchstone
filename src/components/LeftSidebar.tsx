@@ -16,16 +16,21 @@ export function LeftSidebar() {
   const leftTab = useUiStore((s) => s.leftTab)
   const leftOpen = useUiStore((s) => s.leftOpen)
   const leftWidth = useUiStore((s) => s.leftWidth)
+  const mobile = useUiStore((s) => s.mobile)
   const setLeftTab = useUiStore((s) => s.setLeftTab)
 
   const notes = useVaultStore((s) => s.notes)
   const loading = useVaultStore((s) => s.loading)
   const create = useVaultStore((s) => s.create)
 
+  // A drawer's width is CSS's on mobile — it is not resizable there, and an
+  // inline width would win over the stylesheet.
+  const width = mobile ? undefined : { width: leftOpen ? leftWidth : 0 }
+
   return (
     <aside
       className={`sidebar sidebar--left${leftOpen ? '' : ' sidebar--collapsed'}`}
-      style={{ width: leftOpen ? leftWidth : 0 }}
+      style={width}
       aria-hidden={!leftOpen}
     >
       <div className="sidebar__tabs" role="tablist">
@@ -85,7 +90,7 @@ export function LeftSidebar() {
         </div>
       )}
 
-      {leftOpen && <Resizer side="left" />}
+      {leftOpen && !mobile && <Resizer side="left" />}
     </aside>
   )
 }

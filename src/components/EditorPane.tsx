@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect } from 'react'
 import { Icon } from './Icon'
 import { useUiStore } from '../store/uiStore'
+import { SaveIndicator } from './StatusBar'
 import { useVaultStore } from '../store/vaultStore'
 
 // CodeMirror's markdown mode pulls in the HTML, JavaScript, and CSS modes for
@@ -10,6 +11,7 @@ import { useVaultStore } from '../store/vaultStore'
 const Editor = lazy(() => import('./editor/Editor'))
 
 export function EditorPane() {
+  const mobile = useUiStore((s) => s.mobile)
   const toggleLeft = useUiStore((s) => s.toggleLeft)
   const toggleRight = useUiStore((s) => s.toggleRight)
   const leftOpen = useUiStore((s) => s.leftOpen)
@@ -38,6 +40,8 @@ export function EditorPane() {
         </button>
 
         <span className="tabbar__title">{active ? active.path : 'No note open'}</span>
+
+        {mobile && <SaveIndicator />}
 
         <button
           className="icon-button"
