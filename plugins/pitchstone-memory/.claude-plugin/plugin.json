@@ -1,7 +1,7 @@
 {
   "name": "pitchstone-memory",
   "description": "Makes a Pitchstone vault Claude's memory in every project: the MCP tools against https://pitchstone.app/mcp, the conventions for what is recorded where, and a startup note naming this project's memory notes.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "Tijamo",
     "url": "https://pitchstone.app"

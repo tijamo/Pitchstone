@@ -9,6 +9,17 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^mcp__plugin_pitchstone-memory_pitchstone__(vault_info|list_notes|read_note|search_notes|backlinks|list_tags|write_note)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/allow-memory-tools.sh"
+          }
+        ]
+      }
     ]
   }
 }
