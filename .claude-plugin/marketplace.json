@@ -1,0 +1,15 @@
+{
+  "name": "tijamo",
+  "description": "Plugins for Tijamo's projects.",
+  "owner": {
+    "name": "Tijamo",
+    "url": "https://github.com/tijamo"
+  },
+  "plugins": [
+    {
+      "name": "pitchstone-memory",
+      "source": "./plugins/pitchstone-memory",
+      "description": "Makes a Pitchstone vault Claude's memory in every project: the MCP tools, the conventions for what goes where, and a startup note naming this project's memory notes."
+    }
+  ]
+}

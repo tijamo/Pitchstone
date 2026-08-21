@@ -141,34 +141,55 @@ vault.
 Everything Claude writes goes under `Memory/`, so Tim's own notes stay at the
 top level and the file tree doesn't fill up with machine minutes:
 
-| Path | What it holds |
-| --- | --- |
-| `Memory/Projects/<Project>.md` | Durable per-project facts: decisions taken, why an approach was rejected, standing preferences. Rewrite in place as things change — this is the current picture, not a log. |
-| `Memory/Sessions/YYYY-MM-DD.md` | What actually happened that day, appended to as it happens. One note per day, not per session; a second session on the same date appends to the same note. |
+```
+Memory/
+  Projects/<Project>/state.md       ← current truth, rewritten in place
+                    /decisions.md   ← append-only, dated
+                    /gotchas.md     ← things that bit us
+  Patterns/<topic>.md               ← what carries across projects
+  Daily/YYYY-MM-DD.md               ← thin journal, links out. Optional.
+```
+
+**`state.md` is the one that earns its keep** — stack, deploy targets, what is
+done, what is mid-flight, what is blocked — and it is the read path that
+decides this shape, not the write path. Reconstructing "what is true about this
+project" out of a hundred dated notes is slow and lossy; one note kept current
+is not. So a cold session reads `state.md` and is oriented, and everything else
+is reference.
+
+**Logs record that a decision happened; `state.md` records what is true now.**
+That is the rule that stops an append-only log from lying: a decision from
+three weeks ago says "we're using X" long after X was ripped out. Where a log
+and `state.md` disagree, `state.md` is right and the log is history.
 
 Conventions that keep it usable:
 
+- **Rewrite `state.md`; append everything else** — `write_note` with
+  `mode: "append"` for `decisions.md`, `gotchas.md`, and daily notes.
+  Rewriting one of those loses what's already in it.
 - **Tag every memory note `#memory`**, plus a project tag (`#pitchstone`,
   `#dodo`). `list_tags` is how a cold session finds what's already there.
-- **Link, don't repeat.** A session note should say what happened and
-  `[[Pitchstone]]`-link out; the project note carries the settled version.
-- **Append, don't rewrite, session notes** — `write_note` with `mode: "append"`
-  exists exactly for this. Rewriting one loses the day's earlier entries.
 - **Search before writing.** `search_notes` first: the vault very often already
   knows, and a second note saying the same thing is worse than none.
-- **Note titles are vault-wide.** `read_note` and `[[wikilinks]]` resolve a
-  bare title regardless of folder, so `Memory/Projects/Pitchstone.md` and a
-  top-level `Pitchstone.md` are ambiguous by title. Refer to memory notes by
-  full path, and don't reuse a title that already exists elsewhere.
+- **Refer to memory notes by full path, never a bare title.** `read_note` and
+  `[[wikilinks]]` resolve a title regardless of folder, and every project now
+  has a note titled "state" — so `[[state]]` is ambiguous and
+  `read_note("state")` is a coin toss. Link to `[[Pitchstone]]` and let the
+  reader follow the folder.
+- **Link, don't repeat.** A daily entry says what happened and links out; the
+  project's own notes carry the settled version.
 
 ### At the start and end of a session
 
-Not a hook, just the habit: open with `vault_info` and a `search_notes` for
-whatever the task is about, and read `Memory/Projects/Pitchstone.md` before
-building anything. Close by appending to today's session note — what was done,
-what was decided, and anything the next session would otherwise have to
-rediscover. Something learned the hard way (a gotcha, a dead end) is worth
-writing down the moment it's learned, not at the end.
+Open with `vault_info`, read `Memory/Projects/Pitchstone/state.md` before
+building anything, and `search_notes` for the task in hand. Close by updating
+`state.md` if what's true has changed, and appending the decision or the gotcha
+if there was one. Something learned the hard way is worth writing down the
+moment it's learned, not at the end.
+
+On a machine with the `pitchstone-memory` plugin installed (see below) a
+`SessionStart` hook says all this at the top of every session, with this
+project's paths filled in.
 
 ## Architecture
 
@@ -270,6 +291,11 @@ Ask rather than guessing, and write the answer down here when you get it.
 ## What's in the repo
 
 - `CLAUDE.md` — this file.
+- `.claude-plugin/marketplace.json` and `plugins/pitchstone-memory/` — the repo
+  doubles as a Claude Code plugin marketplace. The plugin carries the MCP
+  server, the `memory` skill, and a `SessionStart` hook, so any project on a
+  machine gets the vault as memory without copying `.mcp.json` around. Nothing
+  in it ships with the app; Netlify never sees it.
 - `.claude/settings.json` — approves the `pitchstone` MCP server for every
   session (`enabledMcpjsonServers`), allowlists the two read-only Netlify MCP
   tools plus Pitchstone's read tools and `write_note` so deploy polling and
