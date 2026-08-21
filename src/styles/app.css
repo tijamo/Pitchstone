@@ -1005,6 +1005,42 @@ button {
   display: grid;
 }
 
+/* ---------- Notice strip ---------- */
+
+/*
+ * Sits under the editor's header when the open note has changed on the server
+ * underneath unsaved edits. Deliberately part of the layout rather than a
+ * floating toast: it is a question, and it stays until it is answered.
+ */
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.notice__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice__action {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+}
+
+.notice__action:hover {
+  background: var(--bg-hover);
+}
+
 /* ---------- Mobile ---------- */
 
 /*
@@ -1157,6 +1193,19 @@ button {
   .gate__input,
   .tree__rename {
     font-size: 16px;
+  }
+
+  /* Text over its buttons, rather than three things fighting for 390px. */
+  .notice {
+    flex-wrap: wrap;
+  }
+
+  .notice__text {
+    flex-basis: 100%;
+  }
+
+  .notice__action {
+    padding: 6px 12px;
   }
 
   .toast {

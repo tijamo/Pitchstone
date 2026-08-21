@@ -11,6 +11,16 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.8',
+    title: 'The vault keeps up',
+    items: [
+      'Notes Claude writes over MCP now appear as they land — a new note in the tree, an edit in the note you are reading — with no reload. The same goes for the vault open on another device.',
+      'It closes a hole. Until now, a note open in the app was saved back whole, so anything Claude added to it while it sat there was quietly overwritten on your next keystroke.',
+      'If a note changes while you have unsaved edits in it, Pitchstone stops and asks rather than picking a winner: load theirs, or keep yours. Your edits are held, not saved, until you answer.',
+      'Live updates come over a socket, and a tab that has been in the background catches up the moment you look at it again — so it still works if the socket cannot connect.',
+    ],
+  },
+  {
     ver: '0.7',
     title: 'Pitchstone on a phone',
     items: [

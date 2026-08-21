@@ -20,6 +20,10 @@ export function EditorPane() {
   const notes = useVaultStore((s) => s.notes)
   const activeId = useVaultStore((s) => s.activeId)
   const create = useVaultStore((s) => s.create)
+  const stale = useVaultStore((s) => s.openNoteStale)
+  const reloadOpenNote = useVaultStore((s) => s.reloadOpenNote)
+  const keepLocalEdits = useVaultStore((s) => s.keepLocalEdits)
+  const closeOpenNote = useVaultStore((s) => s.closeOpenNote)
 
   const active = notes.find((n) => n.id === activeId) ?? null
 
@@ -52,6 +56,33 @@ export function EditorPane() {
           <Icon name="panel-right" size={15} />
         </button>
       </div>
+
+      {/* The one thing a refresh cannot decide on its own. Saving writes the
+          whole document, so silently taking either side would lose the other. */}
+      {stale === 'changed' ? (
+        <div className="notice" role="status">
+          <span className="notice__text">
+            This note changed somewhere else while you were writing. Your edits
+            are held, not saved, until you say which version wins.
+          </span>
+          <button className="notice__action" onClick={() => void reloadOpenNote()}>
+            Load theirs
+          </button>
+          <button className="notice__action" onClick={keepLocalEdits}>
+            Keep mine
+          </button>
+        </div>
+      ) : stale === 'deleted' ? (
+        <div className="notice" role="status">
+          <span className="notice__text">
+            This note was deleted somewhere else. What is on screen is all
+            that is left of it — copy anything you need before closing.
+          </span>
+          <button className="notice__action" onClick={closeOpenNote}>
+            Close
+          </button>
+        </div>
+      ) : null}
 
       <div className="editor">
         {active ? (

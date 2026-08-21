@@ -29,9 +29,11 @@ const frontmatterFolding = foldService.of((state, lineStart) => {
 export default function Editor() {
   const activeId = useVaultStore((s) => s.activeId)
   const notes = useVaultStore((s) => s.notes)
+  const contentVersion = useVaultStore((s) => s.contentVersion)
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const loadedId = useRef<string | null>(null)
+  const loadedVersion = useRef<number | null>(null)
 
   // The editor is created once and then driven by transactions. Re-creating it
   // per render would lose the cursor, the undo history, and the scroll position.
@@ -104,25 +106,36 @@ export default function Editor() {
     }
   }, [])
 
-  // Swap the document when a different note is opened.
+  // Swap the document whenever the store says its text came from somewhere
+  // other than this editor: a different note opened, or the open one reloaded
+  // because it changed on the server. One counter covers both, so a live
+  // update goes through exactly the path a note switch already did.
   useEffect(() => {
     const instance = view.current
-    if (!instance || !activeId || loadedId.current === activeId) return
+    if (!instance || !activeId) return
+    if (loadedId.current === activeId && loadedVersion.current === contentVersion) return
+
+    // Same note, new text: a reload. A different note: a fresh document.
+    const reload = loadedId.current === activeId
     loadedId.current = activeId
+    loadedVersion.current = contentVersion
+
+    // Reopening the same note at a new version is a reload, and the writer was
+    // probably reading somewhere: keep the cursor where it was, clamped to
+    // whatever length the text now is. A different note starts at the top.
+    const content = useVaultStore.getState().content
+    const anchor = reload ? Math.min(instance.state.selection.main.anchor, content.length) : 0
+
     instance.dispatch({
-      changes: {
-        from: 0,
-        to: instance.state.doc.length,
-        insert: useVaultStore.getState().content,
-      },
-      selection: { anchor: 0 },
+      changes: { from: 0, to: instance.state.doc.length, insert: content },
+      selection: { anchor },
       annotations: External.of(true),
       scrollIntoView: true,
     })
     // A freshly created note is opened *and* dropped into rename mode at once,
     // so focusing here would blur the rename box out from under the user.
     if (!useVaultStore.getState().renamingId) instance.focus()
-  }, [activeId])
+  }, [activeId, contentVersion])
 
   // Creating or renaming a note changes which links resolve.
   useEffect(() => {

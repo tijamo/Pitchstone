@@ -25,6 +25,7 @@ export function RightSidebar() {
   const saveStatus = useVaultStore((s) => s.saveStatus)
   const notes = useVaultStore((s) => s.notes)
   const open = useVaultStore((s) => s.open)
+  const linksVersion = useVaultStore((s) => s.linksVersion)
   const headings = useMemo(() => extractHeadings(content), [content])
   const activeTitle = notes.find((n) => n.id === activeId)?.title ?? ''
 
@@ -54,7 +55,9 @@ export function RightSidebar() {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rightTab, activeId, activeTitle, saveStatus === 'saved'])
+    // linksVersion covers a link written from anywhere else — Claude through
+    // the MCP server, or this vault open on another device.
+  }, [rightTab, activeId, activeTitle, linksVersion, saveStatus === 'saved'])
 
   // See LeftSidebar: on mobile the drawer's width belongs to the stylesheet.
   const width = mobile ? undefined : { width: rightOpen ? rightWidth : 0 }

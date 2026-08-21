@@ -7,6 +7,7 @@ import { StatusBar } from './components/StatusBar'
 import { LoginGate } from './components/LoginGate'
 import { SettingsModal } from './components/SettingsModal'
 import { useUiStore, MOBILE_BREAKPOINT } from './store/uiStore'
+import { POLL_MS, watchVault } from './lib/live'
 import { useAuthStore } from './store/authStore'
 import { useVaultStore } from './store/vaultStore'
 
@@ -46,6 +47,7 @@ function Vault() {
   const rightOpen = useUiStore((s) => s.rightOpen)
   const closePanels = useUiStore((s) => s.closePanels)
   const activeId = useVaultStore((s) => s.activeId)
+  const refresh = useVaultStore((s) => s.refresh)
   const load = useVaultStore((s) => s.load)
   const reset = useVaultStore((s) => s.reset)
   const flush = useVaultStore((s) => s.flush)
@@ -66,6 +68,39 @@ function Vault() {
   useEffect(() => {
     if (mobile && activeId) closePanels()
   }, [mobile, activeId, closePanels])
+
+  // The vault is not only edited here: Claude writes to the same rows through
+  // the MCP server, and the app may be open on a phone as well. Realtime is
+  // the fast path; looking at the tab again and a slow tick while the socket
+  // is down are the ones that cannot fail. All three end in the same refresh.
+  useEffect(() => {
+    if (!userId) return
+    let live = false
+    const stopWatching = watchVault(
+      userId,
+      () => void refresh(),
+      (status) => {
+        live = status === 'live'
+      },
+    )
+
+    const catchUp = () => {
+      if (document.visibilityState === 'visible') void refresh()
+    }
+    window.addEventListener('focus', catchUp)
+    document.addEventListener('visibilitychange', catchUp)
+
+    const timer = setInterval(() => {
+      if (!live) catchUp()
+    }, POLL_MS)
+
+    return () => {
+      stopWatching()
+      clearInterval(timer)
+      window.removeEventListener('focus', catchUp)
+      document.removeEventListener('visibilitychange', catchUp)
+    }
+  }, [userId, refresh])
 
   // A queued autosave would otherwise be lost on a close or reload.
   useEffect(() => {

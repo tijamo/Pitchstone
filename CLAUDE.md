@@ -211,6 +211,24 @@ can read and write the same vault.
   TypeScript module imported by both, while *resolution* (title →
   `target_note_id`, including links that were unresolved until their target was
   created) lives in a SQL function.
+- **Live updates have one merge, not three.** The vault is written from more
+  than one place — this tab, another device, and Claude through the MCP server
+  — so `vaultStore.refresh()` reconciles against the server, and Realtime, the
+  focus/visibility listener, and a 45s poll all just *call it*. None of them
+  carries a payload: `postgres_changes` says only "something moved", because a
+  merge that trusts an event is a second merge to keep correct. The poll runs
+  only while the socket is down (`live.ts` reports status), and subscribing
+  refreshes too, since nothing is replayed for the time it was disconnected.
+  `openedAt` — the `updated_at` of the text in the editor, held beside the save
+  timer — is what distinguishes somebody else's write from our own.
+- **A conflict is a question, not a merge.** `saveContent` writes the whole
+  document, so a note that changes under unsaved edits cannot be resolved by
+  taking either side. `refresh` sets `openNoteStale` and *holds the queued
+  write* — the timer is cancelled, `pendingWrite` is kept — and `flush` refuses
+  to write while that flag is set, so leaving the note or closing the tab takes
+  the server's copy. `keepLocalEdits` clears the flag and flushes; the notice
+  says so, because a held save the writer does not know about is worse than
+  either outcome.
 - **Derived data is rebuildable, not write-once.** A note's tags, frontmatter,
   and outgoing links are extracted client-side and written by
   `pitchstone_save_note` on every save. `indexed_at` marks whether that has
@@ -238,6 +256,7 @@ minor bump.
 | 0.5 | ? | Installable PWA and the Pitchstone mark. |
 | 0.6 | 6 | The MCP server at `/mcp`, personal tokens, and a settings dialog. |
 | 0.7 | ? | The mobile layout: one pane, drawer sidebars, a bottom ribbon. |
+| 0.8 | ? | Live updates: the app follows the vault, whoever changed it. |
 
 **A phase is not a version**, which is what made this confusing: phase 1 —
 "initial data and UI setup" — shipped as both 0.1 and 0.2, so the columns
@@ -299,7 +318,8 @@ Ask rather than guessing, and write the answer down here when you get it.
   `SearchPanel`, `TagsPanel`, `GraphView`), `SettingsModal`, `Resizer`, `Icon`,
   and `Mark`.
 - `src/lib/` — the Supabase client, vault path helpers (`paths.ts`), the note
-  data access layer (`notes.ts`), personal tokens (`tokens.ts`), and
+  data access layer (`notes.ts`), personal tokens (`tokens.ts`), live updates
+  (`live.ts`), and
   `markdown/parse.ts`, the shared extraction module (see Architecture) with its
   unit tests beside it.
 - `src/components/editor/` — the CodeMirror 6 editor: the wikilink syntax
@@ -385,6 +405,21 @@ Ask rather than guessing, and write the answer down here when you get it.
   For the same reason nothing there may use a TypeScript feature that is more
   than type erasure: a constructor parameter property will type-check and then
   fail at test time.
+- **Realtime needs `replica identity full` on `pitchstone_notes`, and that is
+  a security setting, not a performance one.** With the default identity a
+  delete puts only the primary key in the WAL, so Realtime can apply neither
+  the table's RLS policy nor the subscription's `user_id=eq.` filter to it —
+  the choice is between deletes that never arrive and deletes that reach every
+  subscriber as a bare uuid. The full row fixes both. Only
+  `pitchstone_notes` is in the `supabase_realtime` publication; links are
+  rewritten by the same statement that saves a note, so a note event already
+  implies them.
+- **CodeMirror only reloads its document when `contentVersion` changes.** The
+  store bumps it whenever the text came from anywhere other than the editor —
+  a note opened, or the open one reloaded from the server — and the editor
+  keeps the cursor (clamped) when the id is unchanged and drops it to the top
+  when it is not. Setting `content` in the store without bumping the counter
+  changes nothing on screen.
 - **A note written over MCP is parsed by the same TypeScript the editor uses.**
   `netlify/lib/mcp/vault.ts` calls `collectTags`/`extractLinks`/
   `parseFrontmatter` before the write, exactly as `saveContent` does. If a note
