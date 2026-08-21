@@ -15,9 +15,33 @@ It bundles three things:
 
 ## Install
 
+From inside a Claude Code session, typed at the prompt:
+
+```
+/plugin marketplace add tijamo/Pitchstone
+/plugin install pitchstone-memory@tijamo
+```
+
+`/plugin` on its own opens the plugin manager instead. The same commands work
+as `claude plugin …` in a shell, and the Claude desktop app has a plugin
+browser under the **+** button beside the prompt → **Plugins** → **Add
+plugin**.
+
+**Or skip installing entirely.** A folder under a skills directory that
+contains `.claude-plugin/plugin.json` is loaded as a plugin in its own right,
+with no marketplace and no install step:
+
 ```bash
-claude plugin marketplace add tijamo/Pitchstone
-claude plugin install pitchstone-memory@tijamo
+cp -R plugins/pitchstone-memory ~/.claude/skills/
+```
+
+It loads next session as `pitchstone-memory@skills-dir`, in every project,
+and updates when you replace the folder. `/reload-plugins` picks up changes to
+anything other than a skill's own text without a restart.
+
+Either way, the token:
+
+```bash
 export PITCHSTONE_TOKEN=…   # add to ~/.zshrc
 ```
 
@@ -27,8 +51,8 @@ plugin's MCP config at launch, so the token itself is never in any file here.
 Without it the server can't connect, and the session hook stays quiet rather
 than pointing Claude at a vault it can't reach.
 
-Check with `claude mcp list`: a working server reads
-`plugin:pitchstone-memory:pitchstone … ✔ Connected`.
+Check with `/mcp` in a session, or `claude mcp list` in a shell: a working
+server reads `plugin:pitchstone-memory:pitchstone … ✔ Connected`.
 
 ## What it assumes about the vault
 
@@ -61,13 +85,23 @@ from `hooks/hooks.json` and put the same list in your own
 ## Cloud sessions
 
 A Claude Code web session starts in a fresh container, so nothing installed on
-your machine is there. Two things make it work:
+your machine is there — user-scoped `enabledPlugins` included. What reaches it
+is the repository. Declare the marketplace and the plugin in the repo's
+`.claude/settings.json` and the plugin is **installed at session start**, given
+an environment whose network policy can reach GitHub:
 
-1. `PITCHSTONE_TOKEN` as an environment variable on the environment, and a
-   network policy that allows `pitchstone.app`.
-2. The plugin installed in that container — a setup script running the two
-   install commands above, since `enabledPlugins` in a repo's settings enables
-   a plugin but does not install it.
+```json
+{
+  "extraKnownMarketplaces": {
+    "tijamo": { "source": { "source": "github", "repo": "tijamo/Pitchstone" } }
+  },
+  "enabledPlugins": { "pitchstone-memory@tijamo": true }
+}
+```
 
-A repo that would rather not depend on either can keep its own `.mcp.json`;
-that is what Pitchstone itself does.
+The environment still needs `PITCHSTONE_TOKEN` as an environment variable and
+`pitchstone.app` allowed by its network policy.
+
+Don't do this in Pitchstone's own repo: it already carries a `pitchstone`
+server in `.mcp.json`, and the plugin's copy is a second server under a
+different name, so every tool would appear twice.

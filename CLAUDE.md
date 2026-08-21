@@ -295,7 +295,10 @@ Ask rather than guessing, and write the answer down here when you get it.
   doubles as a Claude Code plugin marketplace. The plugin carries the MCP
   server, the `memory` skill, and a `SessionStart` hook, so any project on a
   machine gets the vault as memory without copying `.mcp.json` around. Nothing
-  in it ships with the app; Netlify never sees it.
+  in it ships with the app; Netlify never sees it. **This repo deliberately
+  does not enable the plugin on itself** — it already has a `pitchstone` server
+  in `.mcp.json`, and the plugin's is a second server under a different name,
+  so every tool would appear twice.
 - `.claude/settings.json` — approves the `pitchstone` MCP server for every
   session (`enabledMcpjsonServers`), allowlists the two read-only Netlify MCP
   tools plus Pitchstone's read tools and `write_note` so deploy polling and
