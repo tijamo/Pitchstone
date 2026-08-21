@@ -6,10 +6,12 @@ import { bracketMatching, codeFolding, foldKeymap, foldService } from '@codemirr
 import { Annotation, EditorState } from '@codemirror/state'
 import { EditorView, drawSelection, keymap } from '@codemirror/view'
 import { useVaultStore } from '../../store/vaultStore'
+import { useUiStore } from '../../store/uiStore'
 import { parseFrontmatter } from '../../lib/markdown/parse'
+import { matchNotesByTarget } from '../../lib/markdown/resolve'
 import { wikilinkCompletions } from './completion'
 import { setLineRevealer } from './editorHandle'
-import { knownTitles, livePreview, setKnownTitles } from './livePreview'
+import { livePreview, setVaultIndex, vaultIndex } from './livePreview'
 import { editorTheme, markdownHighlighting } from './theme'
 import { wikiLinkSyntax } from './wikilinkSyntax'
 
@@ -53,17 +55,13 @@ export default function Editor() {
           frontmatterFolding,
           keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...foldKeymap]),
           markdown({ extensions: [wikiLinkSyntax] }),
-          knownTitles,
+          vaultIndex,
           livePreview,
           markdownHighlighting,
           editorTheme,
           EditorView.lineWrapping,
           autocompletion({
-            override: [
-              wikilinkCompletions(() =>
-                useVaultStore.getState().notes.map((note) => note.title),
-              ),
-            ],
+            override: [wikilinkCompletions(() => useVaultStore.getState().notes)],
             icons: false,
           }),
           EditorView.updateListener.of((update) => {
@@ -76,12 +74,24 @@ export default function Editor() {
             mousedown(event) {
               const target = event.target as HTMLElement | null
               const link = target?.closest('.cm-wikilink')
-              const title = link?.getAttribute('data-wikilink')
-              if (!title) return false
-              // Clicking a link navigates; a link to a note that does not exist
-              // yet creates it, as Obsidian does.
+              const wikiTarget = link?.getAttribute('data-wikilink')
+              if (!wikiTarget) return false
               event.preventDefault()
-              void useVaultStore.getState().openOrCreate(title)
+
+              const matches = matchNotesByTarget(useVaultStore.getState().notes, wikiTarget)
+              if (matches.length > 1) {
+                // More than one note answers to this — ask, rather than
+                // guessing which one the link meant.
+                useUiStore.getState().setLinkChoice({
+                  x: event.clientX,
+                  y: event.clientY,
+                  target: wikiTarget,
+                  matches,
+                })
+              } else {
+                // Exactly one match opens it; none creates it, as Obsidian does.
+                void useVaultStore.getState().openOrCreate(wikiTarget)
+              }
               return true
             },
           }),
@@ -137,11 +147,10 @@ export default function Editor() {
     if (!useVaultStore.getState().renamingId) instance.focus()
   }, [activeId, contentVersion])
 
-  // Creating or renaming a note changes which links resolve.
+  // Creating or renaming a note changes which links resolve, and whether a
+  // title that used to be unique now has company.
   useEffect(() => {
-    view.current?.dispatch({
-      effects: setKnownTitles.of(new Set(notes.map((note) => note.title.toLowerCase()))),
-    })
+    view.current?.dispatch({ effects: setVaultIndex.of(notes) })
   }, [notes])
 
   return <div className="editor__cm" ref={host} />

@@ -6,6 +6,7 @@ import { RightSidebar } from './components/RightSidebar'
 import { StatusBar } from './components/StatusBar'
 import { LoginGate } from './components/LoginGate'
 import { SettingsModal } from './components/SettingsModal'
+import { LinkChoice } from './components/LinkChoice'
 import { useUiStore, MOBILE_BREAKPOINT } from './store/uiStore'
 import { POLL_MS, watchVault } from './lib/live'
 import { useAuthStore } from './store/authStore'
@@ -123,6 +124,7 @@ function Vault() {
         <button className="scrim" aria-label="Close panel" onClick={closePanels} />
       )}
       <SettingsModal />
+      <LinkChoice />
       {error && (
         <div className="toast" role="alert">
           <span>{error}</span>

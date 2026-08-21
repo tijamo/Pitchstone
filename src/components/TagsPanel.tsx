@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useVaultStore } from '../store/vaultStore'
+import { duplicateTitles } from '../lib/markdown/resolve'
+import { dirname } from '../lib/paths'
 
 export function TagsPanel() {
   const notes = useVaultStore((s) => s.notes)
@@ -28,6 +30,7 @@ export function TagsPanel() {
 
   if (selected && counts.some(([tag]) => tag === selected)) {
     const tagged = notes.filter((n) => n.tags.includes(selected))
+    const duplicates = duplicateTitles(tagged)
     return (
       <div>
         <button className="tags-panel__back" onClick={() => setSelected(null)}>
@@ -44,6 +47,9 @@ export function TagsPanel() {
                   onClick={() => void open(note.id)}
                 >
                   <span className="tree__name">{note.title}</span>
+                  {duplicates.has(note.title.toLowerCase()) && (
+                    <span className="item-path">{dirname(note.path) || '/'}</span>
+                  )}
                 </button>
               </div>
             </li>

@@ -10,8 +10,10 @@ import {
   type SimulationNodeDatum,
 } from 'd3-force'
 import { useVaultStore } from '../store/vaultStore'
+import { useUiStore } from '../store/uiStore'
 import { listLinks } from '../lib/notes'
 import type { NoteMeta } from '../lib/notes'
+import { matchNotesByTarget } from '../lib/markdown/resolve'
 
 type GraphNode = SimulationNodeDatum & {
   id: string
@@ -19,6 +21,8 @@ type GraphNode = SimulationNodeDatum & {
   degree: number
   /** A link target that no note answers to yet — drawn hollow. */
   unresolved: boolean
+  /** A link target more than one note answers to — drawn hollow, differently. */
+  ambiguous: boolean
 }
 type GraphLink = SimulationLinkDatum<GraphNode>
 
@@ -140,6 +144,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       const labelColor = styles.getPropertyValue('--text-muted').trim()
       const accent = styles.getPropertyValue('--accent').trim()
       const unresolvedColor = styles.getPropertyValue('--link-unresolved').trim()
+      const ambiguousColor = styles.getPropertyValue('--link-ambiguous').trim()
 
       ctx!.strokeStyle = lineColor
       ctx!.lineWidth = 1
@@ -169,9 +174,9 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         ctx!.beginPath()
         ctx!.arc(p.x, p.y, r, 0, Math.PI * 2)
         if (node.unresolved) {
-          // Hollow, the way an unresolved wikilink reads in the editor: the
-          // note is named but not yet written.
-          ctx!.strokeStyle = unresolvedColor
+          // Hollow, the way an unresolved or ambiguous wikilink reads in the
+          // editor: named but not yet written, or named by more than one note.
+          ctx!.strokeStyle = node.ambiguous ? ambiguousColor : unresolvedColor
           ctx!.lineWidth = 1.5
           ctx!.stroke()
           ctx!.lineWidth = 1
@@ -181,7 +186,9 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         }
 
         ctx!.fillStyle = node.unresolved
-          ? unresolvedColor
+          ? node.ambiguous
+            ? ambiguousColor
+            : unresolvedColor
           : isActive
             ? accent
             : labelColor
@@ -237,12 +244,22 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         title: n.title,
         degree: degree.get(n.id) ?? 0,
         unresolved: false,
+        ambiguous: false,
       }))
       const seen = new Set(nodes.map((n) => n.id))
       for (const e of endpoints) {
         if (e.resolved || seen.has(e.to)) continue
         seen.add(e.to)
-        nodes.push({ id: e.to, title: e.title, degree: degree.get(e.to) ?? 0, unresolved: true })
+        nodes.push({
+          id: e.to,
+          title: e.title,
+          degree: degree.get(e.to) ?? 0,
+          unresolved: true,
+          // A name more than one note answers to needs qualifying, not
+          // creating — the placeholder is not "unwritten" the way a genuinely
+          // absent title is.
+          ambiguous: matchNotesByTarget(notes, e.title).length > 1,
+        })
       }
 
       // Carry positions over from the previous layout so a refresh — a save
@@ -324,7 +341,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       }
     }
 
-    function handlePointerUp() {
+    function handlePointerUp(e: PointerEvent) {
       const drag = dragRef.current
       if (drag) {
         drag.node.fx = null
@@ -333,8 +350,19 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         if (!drag.moved) {
           // Clicking a placeholder writes the note it stands for, which is
           // what following the wikilink itself would have done.
-          if (drag.node.unresolved) void openOrCreate(drag.node.title)
-          else void open(drag.node.id)
+          if (drag.node.ambiguous) {
+            const matches = matchNotesByTarget(notes, drag.node.title)
+            useUiStore.getState().setLinkChoice({
+              x: e.clientX,
+              y: e.clientY,
+              target: drag.node.title,
+              matches,
+            })
+          } else if (drag.node.unresolved) {
+            void openOrCreate(drag.node.title)
+          } else {
+            void open(drag.node.id)
+          }
         }
         dragRef.current = null
       }

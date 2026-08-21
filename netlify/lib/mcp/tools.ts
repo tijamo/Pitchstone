@@ -7,6 +7,7 @@
  * that must round-trip exactly — a note's body — is returned verbatim.
  */
 import { excerptAround, extractLinks, parseFrontmatter } from '../../../src/lib/markdown/parse.ts'
+import { targetMatchesNote } from '../../../src/lib/markdown/resolve.ts'
 import * as vault from './vault.ts'
 import { VaultError } from './vault.ts'
 
@@ -236,9 +237,11 @@ const backlinks: Tool = {
     ])
     if (sources.length === 0) return `Nothing links to ${note.path}.`
 
-    const wanted = note.title.toLowerCase()
     const lines = sources.map((source) => {
-      const link = extractLinks(source.content).find((l) => l.target.toLowerCase() === wanted)
+      // A folder-qualified link ("Pitchstone/gotchas") no longer matches this
+      // note's bare title, so the excerpt has to be found the same way the
+      // link was resolved -- by path, not by a plain string comparison.
+      const link = extractLinks(source.content).find((l) => targetMatchesNote(l.target, note))
       const context = link ? excerptAround(source.content, link.from, link.to) : ''
       return `${source.path}${context ? `\n  ${context}` : ''}`
     })

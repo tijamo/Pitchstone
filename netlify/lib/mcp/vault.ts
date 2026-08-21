@@ -41,7 +41,7 @@ function connection(): { url: string; key: string } {
   return { url, key }
 }
 
-export type VaultErrorKind = 'auth' | 'not-found' | 'conflict' | 'invalid' | 'server'
+export type VaultErrorKind = 'auth' | 'not-found' | 'conflict' | 'invalid' | 'ambiguous' | 'server'
 
 export class VaultError extends Error {
   // Written out rather than declared as a constructor parameter property:
@@ -60,6 +60,7 @@ export class VaultError extends Error {
 const ERROR_KINDS: Record<string, VaultErrorKind> = {
   '28000': 'auth', // pitchstone_token_user: the token is not one of ours
   P0002: 'not-found', // no note matching the path or title given
+  P0003: 'ambiguous', // pitchstone_note_id_for: more than one note matches
   '23505': 'conflict', // pitchstone_notes_path_unique
   '23514': 'invalid', // pitchstone_notes_path_valid
   '22P02': 'invalid', // malformed input to a parameter

@@ -1041,6 +1041,77 @@ button {
   background: var(--bg-hover);
 }
 
+/* ---------- Duplicate-title subtext ---------- */
+
+/* The folder line under a title that more than one note shares — search
+   results, backlinks, a tag's note list. Shown only for a title that is not
+   unique in the list being rendered; an unambiguous result stays as it was. */
+.item-path {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Link choice ---------- */
+
+/* What a [[wikilink]] or graph node shows instead of guessing, when its
+   title names more than one note. Anchored at the click, like a context
+   menu, rather than a modal taking the screen for a one-item decision. */
+.link-choice {
+  position: fixed;
+  z-index: 25;
+  width: 260px;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.32);
+}
+
+.link-choice__heading {
+  padding: 4px 6px 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.link-choice__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link-choice__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.link-choice__item:hover {
+  background: var(--bg-hover);
+}
+
+.link-choice__title {
+  color: var(--link);
+  font-size: 13px;
+}
+
+.link-choice__path {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- Mobile ---------- */
 
 /*

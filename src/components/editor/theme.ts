@@ -59,6 +59,12 @@ export const editorTheme = EditorView.theme({
     color: 'var(--link-unresolved)',
     textDecorationStyle: 'dashed',
   },
+  // More than one note answers to this title — distinct from unresolved
+  // (dashed) because the fix is to qualify the link, not to write a note.
+  '.cm-wikilink--ambiguous': {
+    color: 'var(--link-ambiguous)',
+    textDecorationStyle: 'dotted',
+  },
 
   '.cm-tooltip': {
     backgroundColor: 'var(--bg-raised)',
@@ -75,6 +81,12 @@ export const editorTheme = EditorView.theme({
   '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': {
     backgroundColor: 'var(--accent-soft)',
     color: 'var(--text-normal)',
+  },
+  // The folder hint beside a completion whose title is not unique.
+  '.cm-completionDetail': {
+    marginLeft: '8px',
+    color: 'var(--text-faint)',
+    fontStyle: 'normal',
   },
 })
 

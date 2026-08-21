@@ -33,6 +33,7 @@
   /* Semantic */
   --link: #a394f8;
   --link-unresolved: #b06a6a;
+  --link-ambiguous: #c99a3e;
   --tag: #4db6ac;
   --danger: #e05252;
 
@@ -76,6 +77,7 @@
 
     --link: #5b46cf;
     --link-unresolved: #b3524f;
+    --link-ambiguous: #9c7326;
     --tag: #2f8f85;
   }
 }
@@ -101,5 +103,6 @@
 
   --link: #5b46cf;
   --link-unresolved: #b3524f;
+  --link-ambiguous: #9c7326;
   --tag: #2f8f85;
 }

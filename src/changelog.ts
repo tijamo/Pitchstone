@@ -11,6 +11,16 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.9',
+    title: 'When two notes share a name',
+    items: [
+      'A title only has to be unique enough to say what it means. With per-project notes like gotchas.md now common, the vault disambiguates instead of guessing: the [[ completion list shows the folder next to a name that is not unique, and accepting one writes just enough of the path to pick it out — "Pitchstone/gotchas", not the whole path from the vault root.',
+      'A [[link]] now reads three ways: written and unique, not written yet, or ambiguous — a name more than one note answers to. Clicking an ambiguous link, or its placeholder in the graph, opens a small chooser instead of picking one for you.',
+      'Search results, backlinks, and a tag’s note list show the folder underneath a title only when something else in that list shares it.',
+      'This closes a real gap, not just a display one: reading or writing a note by a bare name that fits more than one used to resolve to whichever the database found first, silently. It now refuses and says so, whether the call came from the app or from Claude over MCP.',
+    ],
+  },
+  {
     ver: '0.8',
     title: 'The vault keeps up',
     items: [

@@ -6,6 +6,7 @@ import {
   extractLinks,
   parseFrontmatter,
 } from './markdown/parse'
+import { targetMatchesNote } from './markdown/resolve'
 
 /**
  * Data access for the vault. Every query is scoped by RLS to the signed-in
@@ -115,7 +116,11 @@ export type Backlink = { note: NoteMeta; snippet: string | null }
  * PostgREST's embedded-join syntax for a table with two FKs to the same
  * parent.
  */
-export async function fetchBacklinks(noteId: string, noteTitle: string): Promise<Backlink[]> {
+export async function fetchBacklinks(
+  noteId: string,
+  noteTitle: string,
+  notePath: string,
+): Promise<Backlink[]> {
   const { data: links, error } = await db()
     .from('pitchstone_links')
     .select('source_note_id')
@@ -132,10 +137,13 @@ export async function fetchBacklinks(noteId: string, noteTitle: string): Promise
     .order('path')
   if (sourcesError) throw sourcesError
 
-  const wanted = noteTitle.toLowerCase()
+  const target = { title: noteTitle, path: notePath }
   return (sources ?? []).map((source) => {
     const { content, ...meta } = source as Note
-    const match = extractLinks(content).find((l) => l.target.toLowerCase() === wanted)
+    // A folder-qualified link ("Pitchstone/gotchas") no longer matches this
+    // note's bare title as a plain string, so the excerpt is found the same
+    // way the link was resolved -- by path, not by string equality.
+    const match = extractLinks(content).find((l) => targetMatchesNote(l.target, target))
     return { note: meta, snippet: match ? excerptAround(content, match.from, match.to) : null }
   })
 }

@@ -11,6 +11,7 @@ import {
   type NoteMeta,
 } from '../lib/notes'
 import { dirname, joinPath, sanitizeSegment, toPath, uniquePath } from '../lib/paths'
+import { matchNotesByTarget } from '../lib/markdown/resolve'
 
 export type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
 
@@ -230,17 +231,32 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   },
 
   // Following a wikilink: open the note it names, or create it alongside the
-  // current one if it does not exist yet.
-  openOrCreate: async (title) => {
+  // current one if it does not exist yet. Ambiguity is the caller's to catch
+  // — Editor.tsx and GraphView check matchNotesByTarget themselves and show a
+  // chooser instead, since only they know where to anchor it. This still
+  // guards against being reached with more than one match some other way, by
+  // doing nothing rather than guessing.
+  openOrCreate: async (target) => {
     const state = get()
-    const wanted = title.trim().toLowerCase()
-    const existing = state.notes.find((n) => n.title.toLowerCase() === wanted)
-    if (existing) {
-      await state.open(existing.id)
+    const matches = matchNotesByTarget(state.notes, target)
+    if (matches.length > 1) return
+    if (matches.length === 1) {
+      await state.open(matches[0].id)
+      return
+    }
+
+    // Nothing matches. A folder-qualified target ("Projects/New") creates the
+    // note at that literal path; a bare name creates it alongside whichever
+    // note is open, the way following a plain [[link]] always has.
+    const trimmed = target.trim()
+    if (trimmed.includes('/')) {
+      const segments = trimmed.split('/')
+      const name = segments.pop() as string
+      await state.create(segments.join('/'), name)
       return
     }
     const active = state.notes.find((n) => n.id === state.activeId)
-    await state.create(active ? dirname(active.path) : '', title.trim())
+    await state.create(active ? dirname(active.path) : '', trimmed)
   },
 
   rename: async (id, input) => {

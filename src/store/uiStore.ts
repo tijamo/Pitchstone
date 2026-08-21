@@ -1,8 +1,16 @@
 import { create } from 'zustand'
+import type { NoteMeta } from '../lib/notes'
 
 export type LeftTab = 'files' | 'search' | 'tags'
 export type RightTab = 'backlinks' | 'outline' | 'graph'
 export type Theme = 'dark' | 'light'
+
+/**
+ * Shown when a clicked [[wikilink]] or graph node names more than one note.
+ * Positioned at the click, so it reads as a small menu at that spot rather
+ * than a modal taking over the screen for a one-item decision.
+ */
+export type LinkChoice = { x: number; y: number; target: string; matches: NoteMeta[] }
 
 const THEME_KEY = 'pitchstone:theme'
 const LEFT_WIDTH_KEY = 'pitchstone:leftWidth'
@@ -58,6 +66,7 @@ type UiState = {
   /** null means "follow the OS preference". */
   theme: Theme | null
   settingsOpen: boolean
+  linkChoice: LinkChoice | null
   setLeftTab: (tab: LeftTab) => void
   setRightTab: (tab: RightTab) => void
   toggleLeft: () => void
@@ -68,6 +77,8 @@ type UiState = {
   setSettingsOpen: (open: boolean) => void
   setMobile: (mobile: boolean) => void
   closePanels: () => void
+  setLinkChoice: (choice: LinkChoice) => void
+  clearLinkChoice: () => void
 }
 
 // Both sidebars start open on a desktop and closed on a phone, where they are
@@ -86,6 +97,7 @@ export const useUiStore = create<UiState>((set) => ({
   rightWidth: storedWidth(RIGHT_WIDTH_KEY, DEFAULT_RIGHT_WIDTH),
   theme: storedTheme(),
   settingsOpen: false,
+  linkChoice: null,
 
   // Selecting a tab also reveals the sidebar if it was collapsed, so the ribbon
   // buttons always do something visible. On a phone the two panels are drawers
@@ -111,6 +123,9 @@ export const useUiStore = create<UiState>((set) => ({
     set((s) => (s.mobile === mobile ? {} : { mobile, leftOpen: !mobile, rightOpen: !mobile })),
 
   closePanels: () => set({ leftOpen: false, rightOpen: false }),
+
+  setLinkChoice: (linkChoice) => set({ linkChoice }),
+  clearLinkChoice: () => set({ linkChoice: null }),
 
   setLeftWidth: (width) => {
     const leftWidth = clampWidth(width)

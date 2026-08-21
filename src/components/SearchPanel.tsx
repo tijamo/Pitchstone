@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVaultStore } from '../store/vaultStore'
 import { searchNotes, type SearchResult } from '../lib/notes'
+import { duplicateTitles } from '../lib/markdown/resolve'
+import { dirname } from '../lib/paths'
 
 /** Matches the StartSel/StopSel delimiters pitchstone_search_notes wraps hits
  * in — plain control characters, not HTML, so highlights render as React text
@@ -16,6 +18,7 @@ export function SearchPanel() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const duplicates = useMemo(() => duplicateTitles(results), [results])
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -83,6 +86,9 @@ export function SearchPanel() {
                   onClick={() => void open(result.id)}
                 >
                   <span className="tree__name">{result.title}</span>
+                  {duplicates.has(result.title.toLowerCase()) && (
+                    <span className="item-path">{dirname(result.path) || '/'}</span>
+                  )}
                   <span className="search-panel__snippet">
                     {highlight(result.snippet)}
                   </span>

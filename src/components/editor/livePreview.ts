@@ -7,6 +7,7 @@ import {
   type EditorView,
   type ViewUpdate,
 } from '@codemirror/view'
+import { matchNotesByTarget, type NoteRef } from '../../lib/markdown/resolve'
 
 /**
  * Obsidian-style live preview.
@@ -17,14 +18,14 @@ import {
  * the caret is always exactly what is stored.
  */
 
-/** Titles currently in the vault, so a link can be shown as resolved or not. */
-export const setKnownTitles = StateEffect.define<Set<string>>()
+/** The vault's notes, so a link can be shown as resolved, unresolved, or ambiguous. */
+export const setVaultIndex = StateEffect.define<NoteRef[]>()
 
-export const knownTitles = StateField.define<Set<string>>({
-  create: () => new Set(),
+export const vaultIndex = StateField.define<NoteRef[]>({
+  create: () => [],
   update(value, tr) {
     for (const effect of tr.effects) {
-      if (effect.is(setKnownTitles)) return effect.value
+      if (effect.is(setVaultIndex)) return effect.value
     }
     return value
   },
@@ -49,7 +50,7 @@ function buildDecorations(view: EditorView): DecorationSet {
   const ranges: Range<Decoration>[] = []
   const active = activeLines(view)
   const doc = view.state.doc
-  const titles = view.state.field(knownTitles, false) ?? new Set<string>()
+  const notes = view.state.field(vaultIndex, false) ?? []
 
   /** True when this position sits on a line the cursor is on. */
   const revealed = (pos: number) => active.has(doc.lineAt(pos).number)
@@ -91,10 +92,11 @@ function buildDecorations(view: EditorView): DecorationSet {
 
           case 'WikiLink': {
             const target = targetOf(view, node.from, node.to)
-            const resolved = titles.has(target.toLowerCase())
+            const matches = matchNotesByTarget(notes, target)
+            const state = matches.length === 0 ? 'unresolved' : matches.length > 1 ? 'ambiguous' : ''
             ranges.push(
               Decoration.mark({
-                class: `cm-wikilink${resolved ? '' : ' cm-wikilink--unresolved'}`,
+                class: `cm-wikilink${state ? ` cm-wikilink--${state}` : ''}`,
                 attributes: { 'data-wikilink': target },
               }).range(node.from, node.to),
             )
@@ -106,14 +108,28 @@ function buildDecorations(view: EditorView): DecorationSet {
             return
 
           case 'WikiLinkTarget': {
-            // With an alias present, the target itself is syntax: hide it and
-            // let the alias stand in, exactly as Obsidian renders it.
             const parent = node.node.parent
             const hasAlias =
               parent?.name === 'WikiLink' &&
               parent.getChild('WikiLinkAlias') !== null
-            if (hasAlias && !revealed(node.from)) {
+
+            if (revealed(node.from)) return
+
+            if (hasAlias) {
+              // With an alias present, the target itself is syntax: hide it
+              // and let the alias stand in, exactly as Obsidian renders it.
               ranges.push(hidden.range(node.from, node.to))
+              return
+            }
+
+            // A folder-qualified target with no alias ("Pitchstone/gotchas")
+            // shows only its leaf segment, the same way Obsidian hides a
+            // folder path it did not ask to see — the qualifier is there to
+            // pick a note, not to be read.
+            const text = doc.sliceString(node.from, node.to)
+            const lastSlash = text.lastIndexOf('/')
+            if (lastSlash !== -1) {
+              ranges.push(hidden.range(node.from, node.from + lastSlash + 1))
             }
             return
           }
@@ -150,7 +166,7 @@ export const livePreview = ViewPlugin.fromClass(
         update.docChanged ||
         update.selectionSet ||
         update.viewportChanged ||
-        update.transactions.some((tr) => tr.effects.some((e) => e.is(setKnownTitles)))
+        update.transactions.some((tr) => tr.effects.some((e) => e.is(setVaultIndex)))
       ) {
         this.decorations = buildDecorations(update.view)
       }

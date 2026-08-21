@@ -232,6 +232,33 @@ can read and write the same vault.
   TypeScript module imported by both, while *resolution* (title →
   `target_note_id`, including links that were unresolved until their target was
   created) lives in a SQL function.
+- **A title only has to be unique enough to say what it means.** The vault's own
+  per-project shape (`Memory/Projects/<Project>/gotchas.md`, one per project, on
+  purpose) guarantees the same title exists more than once, so nothing may
+  resolve "the note named X" by title alone and pick an arbitrary match — that
+  is a link silently pointing at the wrong project's note, or an MCP write
+  silently landing in one. `pitchstone_notes_matching` in SQL is the one rule
+  every resolver goes through: a bare word matches by title, a `/`-qualified
+  reference (`Pitchstone/gotchas`) matches by the *trailing segments* of a
+  note's path, and anything that matches more than one note is ambiguous —
+  never resolved as a coin flip. `pitchstone_note_id_for` (the MCP path/title
+  argument) raises when that happens; `pitchstone_resolve_links` leaves the
+  link unresolved rather than guessing. `src/lib/markdown/resolve.ts` is the
+  client-side mirror of that same rule — `matchNotesByTarget`,
+  `shortestUniqueSuffix`, `duplicateTitles` — used by the `[[` completion list,
+  the editor's live-preview coloring, the graph's placeholder nodes, and the
+  backlinks/search/tags panels' path subtext. **This is the same "parsed
+  twice" shape as wikilink extraction above, and needs the same discipline**:
+  change the matching rule in one and the other silently disagrees about what
+  a link means.
+- **An ambiguous link is a third state, not a fallback to unresolved.** The
+  editor colors a `[[link]]` three ways — resolved (`.cm-wikilink`), unresolved
+  (`--unresolved`, dashed, a note not yet written), ambiguous (`--ambiguous`,
+  dotted, a name more than one note answers to) — because the fix for the
+  latter two is different: write a note, or qualify the link. Clicking an
+  ambiguous link or graph placeholder opens `<LinkChoice>` (`uiStore.linkChoice`)
+  instead of guessing or creating a duplicate; it is anchored at the click,
+  like a context menu, and closes on a pick, Escape, or an outside click.
 - **Live updates have one merge, not three.** The vault is written from more
   than one place — this tab, another device, and Claude through the MCP server
   — so `vaultStore.refresh()` reconciles against the server, and Realtime, the
@@ -278,6 +305,7 @@ minor bump.
 | 0.6 | 6 | The MCP server at `/mcp`, personal tokens, and a settings dialog. |
 | 0.7 | ? | The mobile layout: one pane, drawer sidebars, a bottom ribbon. |
 | 0.8 | ? | Live updates: the app follows the vault, whoever changed it. |
+| 0.9 | ? | Disambiguation: duplicate titles resolve by folder, not by guessing. |
 
 **A phase is not a version**, which is what made this confusing: phase 1 —
 "initial data and UI setup" — shipped as both 0.1 and 0.2, so the columns
@@ -344,13 +372,13 @@ Ask rather than guessing, and write the answer down here when you get it.
   `vaultStore` (notes, the open note, autosave, `linksVersion`).
 - `src/components/` — the shell (`Ribbon`, `LeftSidebar`, `RightSidebar`,
   `EditorPane`, `StatusBar`, `LoginGate`), the panels (`FileTree`,
-  `SearchPanel`, `TagsPanel`, `GraphView`), `SettingsModal`, `Resizer`, `Icon`,
-  and `Mark`.
+  `SearchPanel`, `TagsPanel`, `GraphView`), `SettingsModal`, `LinkChoice` (the
+  ambiguous-link popover), `Resizer`, `Icon`, and `Mark`.
 - `src/lib/` — the Supabase client, vault path helpers (`paths.ts`), the note
   data access layer (`notes.ts`), personal tokens (`tokens.ts`), live updates
-  (`live.ts`), and
-  `markdown/parse.ts`, the shared extraction module (see Architecture) with its
-  unit tests beside it.
+  (`live.ts`), and `markdown/parse.ts` (shared extraction) and
+  `markdown/resolve.ts` (shared title/path matching) — see Architecture — each
+  with its unit tests beside it.
 - `src/components/editor/` — the CodeMirror 6 editor: the wikilink syntax
   extension, the live-preview decorations, the theme, and `[[` completion.
 - `supabase/migrations/` — the applied schema, kept in the repo for the record.
@@ -471,8 +499,8 @@ Ask rather than guessing, and write the answer down here when you get it.
 
 ## Not yet set up
 
-- **Component and end-to-end tests.** `npm test` covers `lib/markdown/parse.ts`
-  and the MCP server's protocol layer (`netlify/lib/mcp/server.test.ts`, which
+- **Component and end-to-end tests.** `npm test` covers `lib/markdown/parse.ts`,
+  `lib/markdown/resolve.ts`, and the MCP server's protocol layer (`netlify/lib/mcp/server.test.ts`, which
   stubs Supabase at the `fetch` boundary), through Node's built-in runner and
   type stripping — `tsconfig.test.json` type-checks both separately, outside
   the app's build graph. Everything else is verified by driving the app per the

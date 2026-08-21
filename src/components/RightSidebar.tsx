@@ -3,6 +3,8 @@ import { useUiStore, type RightTab } from '../store/uiStore'
 import { useVaultStore } from '../store/vaultStore'
 import { extractHeadings } from '../lib/markdown/parse'
 import { fetchBacklinks, type Backlink } from '../lib/notes'
+import { duplicateTitles } from '../lib/markdown/resolve'
+import { dirname } from '../lib/paths'
 import { revealLine } from './editor/editorHandle'
 import { GraphView } from './GraphView'
 import { Resizer } from './Resizer'
@@ -27,10 +29,16 @@ export function RightSidebar() {
   const open = useVaultStore((s) => s.open)
   const linksVersion = useVaultStore((s) => s.linksVersion)
   const headings = useMemo(() => extractHeadings(content), [content])
-  const activeTitle = notes.find((n) => n.id === activeId)?.title ?? ''
+  const activeNote = notes.find((n) => n.id === activeId)
+  const activeTitle = activeNote?.title ?? ''
+  const activePath = activeNote?.path ?? ''
 
   const [backlinks, setBacklinks] = useState<Backlink[]>([])
   const [loadingBacklinks, setLoadingBacklinks] = useState(false)
+  const duplicateBacklinkTitles = useMemo(
+    () => duplicateTitles(backlinks.map((b) => b.note)),
+    [backlinks],
+  )
 
   // Refetched whenever the open note changes, and whenever a save lands
   // (a link could have been added, removed, or newly resolved).
@@ -41,7 +49,7 @@ export function RightSidebar() {
     }
     let cancelled = false
     setLoadingBacklinks(true)
-    fetchBacklinks(activeId, activeTitle)
+    fetchBacklinks(activeId, activeTitle, activePath)
       .then((result) => {
         if (!cancelled) setBacklinks(result)
       })
@@ -57,7 +65,7 @@ export function RightSidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // linksVersion covers a link written from anywhere else — Claude through
     // the MCP server, or this vault open on another device.
-  }, [rightTab, activeId, activeTitle, linksVersion, saveStatus === 'saved'])
+  }, [rightTab, activeId, activeTitle, activePath, linksVersion, saveStatus === 'saved'])
 
   // See LeftSidebar: on mobile the drawer's width belongs to the stylesheet.
   const width = mobile ? undefined : { width: rightOpen ? rightWidth : 0 }
@@ -118,6 +126,9 @@ export function RightSidebar() {
                       onClick={() => void open(note.id)}
                     >
                       <span className="backlinks__title">{note.title}</span>
+                      {duplicateBacklinkTitles.has(note.title.toLowerCase()) && (
+                        <span className="item-path">{dirname(note.path) || '/'}</span>
+                      )}
                       {snippet && <span className="backlinks__snippet">{snippet}</span>}
                     </button>
                   </li>
