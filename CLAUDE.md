@@ -174,8 +174,12 @@ Conventions that keep it usable:
 - **Refer to memory notes by full path, never a bare title.** `read_note` and
   `[[wikilinks]]` resolve a title regardless of folder, and every project now
   has a note titled "state" — so `[[state]]` is ambiguous and
-  `read_note("state")` is a coin toss. Link to `[[Pitchstone]]` and let the
-  reader follow the folder.
+  `read_note("state")` is a coin toss. A bare project name is worse than
+  ambiguous: since project memory split into `state.md`/`decisions.md`/
+  `gotchas.md`, no note is titled just "Pitchstone" or "Dodo" — that folder
+  isn't a note — so `[[Pitchstone]]` resolves to nothing and the link goes
+  dead silently. Link to the specific note instead, e.g.
+  `[[Memory/Projects/Pitchstone/state]]`.
 - **Link, don't repeat.** A daily entry says what happened and links out; the
   project's own notes carry the settled version.
 
