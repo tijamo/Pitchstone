@@ -1202,6 +1202,14 @@ button {
     justify-self: end;
   }
 
+  /* The graph wants the room a drawer doesn't have to spare: nodes need
+     space to spread out, and 84vw of a phone screen crowds them back
+     together. Every other right-tab panel is a list, which reads fine
+     narrow. */
+  .sidebar--graph {
+    width: 100%;
+  }
+
   .sidebar--collapsed {
     visibility: hidden;
     transition:

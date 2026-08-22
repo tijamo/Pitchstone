@@ -14,6 +14,7 @@ import { useUiStore } from '../store/uiStore'
 import { listLinks } from '../lib/notes'
 import type { NoteMeta } from '../lib/notes'
 import { matchNotesByTarget } from '../lib/markdown/resolve'
+import { basename, dirname } from '../lib/paths'
 
 type GraphNode = SimulationNodeDatum & {
   id: string
@@ -23,8 +24,14 @@ type GraphNode = SimulationNodeDatum & {
   unresolved: boolean
   /** A link target more than one note answers to — drawn hollow, differently. */
   ambiguous: boolean
+  /** A pseudo-node standing for a vault folder, not a note — see paths.ts. */
+  folder: boolean
 }
-type GraphLink = SimulationLinkDatum<GraphNode>
+type GraphLink = SimulationLinkDatum<GraphNode> & {
+  /** A note-in-folder or folder-in-folder edge, not a [[wikilink]] — drawn
+   * dashed so containment reads differently from an actual link. */
+  structural?: boolean
+}
 
 const FONT = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
 const MIN_ZOOM = 0.25
@@ -116,7 +123,11 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     }
 
     function radiusOf(node: GraphNode) {
-      return (4 + Math.min(node.degree, 8)) * Math.min(transformRef.current.k, 1.4)
+      const scale = Math.min(transformRef.current.k, 1.4)
+      // Folders are context for the notes inside them, not hubs in their own
+      // right, so they stay small regardless of how many children they have.
+      if (node.folder) return (3 + Math.min(node.degree, 4)) * scale
+      return (4 + Math.min(node.degree, 8)) * scale
     }
 
     function nodeAt(sx: number, sy: number): GraphNode | null {
@@ -146,7 +157,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       const unresolvedColor = styles.getPropertyValue('--link-unresolved').trim()
       const ambiguousColor = styles.getPropertyValue('--link-ambiguous').trim()
 
-      ctx!.strokeStyle = lineColor
+      const structuralColor = styles.getPropertyValue('--border').trim()
       ctx!.lineWidth = 1
       for (const link of linksRef.current) {
         const s = link.source as GraphNode
@@ -154,11 +165,14 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         if (s.x == null || t.x == null || s.y == null || t.y == null) continue
         const p1 = project(s.x, s.y)
         const p2 = project(t.x, t.y)
+        ctx!.strokeStyle = link.structural ? structuralColor : lineColor
+        ctx!.setLineDash(link.structural ? [3, 3] : [])
         ctx!.beginPath()
         ctx!.moveTo(p1.x, p1.y)
         ctx!.lineTo(p2.x, p2.y)
         ctx!.stroke()
       }
+      ctx!.setLineDash([])
 
       ctx!.font = FONT
       ctx!.textBaseline = 'middle'
@@ -172,26 +186,36 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         const isActive = node.id === activeIdRef.current
 
         ctx!.beginPath()
-        ctx!.arc(p.x, p.y, r, 0, Math.PI * 2)
-        if (node.unresolved) {
-          // Hollow, the way an unresolved or ambiguous wikilink reads in the
-          // editor: named but not yet written, or named by more than one note.
-          ctx!.strokeStyle = node.ambiguous ? ambiguousColor : unresolvedColor
-          ctx!.lineWidth = 1.5
+        if (node.folder) {
+          // A square, not a circle: a folder is a place notes sit in, not a
+          // note itself, so it reads as a different kind of thing at a glance.
+          ctx!.rect(p.x - r, p.y - r, r * 2, r * 2)
+          ctx!.strokeStyle = nodeColor
           ctx!.stroke()
-          ctx!.lineWidth = 1
         } else {
-          ctx!.fillStyle = isActive ? accent : nodeColor
-          ctx!.fill()
+          ctx!.arc(p.x, p.y, r, 0, Math.PI * 2)
+          if (node.unresolved) {
+            // Hollow, the way an unresolved or ambiguous wikilink reads in the
+            // editor: named but not yet written, or named by more than one note.
+            ctx!.strokeStyle = node.ambiguous ? ambiguousColor : unresolvedColor
+            ctx!.lineWidth = 1.5
+            ctx!.stroke()
+            ctx!.lineWidth = 1
+          } else {
+            ctx!.fillStyle = isActive ? accent : nodeColor
+            ctx!.fill()
+          }
         }
 
-        ctx!.fillStyle = node.unresolved
-          ? node.ambiguous
-            ? ambiguousColor
-            : unresolvedColor
-          : isActive
-            ? accent
-            : labelColor
+        ctx!.fillStyle = node.folder
+          ? nodeColor
+          : node.unresolved
+            ? node.ambiguous
+              ? ambiguousColor
+              : unresolvedColor
+            : isActive
+              ? accent
+              : labelColor
         ctx!.fillText(fitLabel(ctx!, node.title, maxLabel, labelCache), p.x + r + 4, p.y)
       }
     }
@@ -245,6 +269,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         degree: degree.get(n.id) ?? 0,
         unresolved: false,
         ambiguous: false,
+        folder: false,
       }))
       const seen = new Set(nodes.map((n) => n.id))
       for (const e of endpoints) {
@@ -259,7 +284,54 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
           // creating — the placeholder is not "unwritten" the way a genuinely
           // absent title is.
           ambiguous: matchNotesByTarget(notes, e.title).length > 1,
+          folder: false,
         })
+      }
+
+      const links: GraphLink[] = endpoints.map((e) => ({ source: e.from, target: e.to }))
+
+      // The vault's folders are never stored (paths.ts), so they are rebuilt
+      // here from note paths on every layout: one pseudo-node per folder, an
+      // edge from each note to the folder it sits in, and from each folder to
+      // its own parent. That gives notes with no [[wikilink]] between them —
+      // most of what sits under Memory/Projects/<Project>/, for instance — a
+      // reason to sit near each other on the graph anyway.
+      const folderNodes = new Map<string, GraphNode>()
+      const folderId = (path: string) => `folder:${path}`
+      function ensureFolder(path: string): GraphNode {
+        const existing = folderNodes.get(path)
+        if (existing) return existing
+        const created: GraphNode = {
+          id: folderId(path),
+          title: basename(path),
+          degree: 0,
+          unresolved: false,
+          ambiguous: false,
+          folder: true,
+        }
+        folderNodes.set(path, created)
+        const parent = dirname(path)
+        if (parent) {
+          links.push({ source: created.id, target: ensureFolder(parent).id, structural: true })
+        }
+        return created
+      }
+      for (const note of notes) {
+        const dir = dirname(note.path)
+        if (!dir) continue
+        links.push({ source: note.id, target: ensureFolder(dir).id, structural: true })
+      }
+      const folderDegree = new Map<string, number>()
+      for (const link of links) {
+        if (!link.structural) continue
+        const from = link.source as string
+        const to = link.target as string
+        folderDegree.set(from, (folderDegree.get(from) ?? 0) + 1)
+        folderDegree.set(to, (folderDegree.get(to) ?? 0) + 1)
+      }
+      for (const node of folderNodes.values()) {
+        node.degree = folderDegree.get(node.id) ?? 0
+        nodes.push(node)
       }
 
       // Carry positions over from the previous layout so a refresh — a save
@@ -276,7 +348,6 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         carried++
       }
 
-      const links: GraphLink[] = endpoints.map((e) => ({ source: e.from, target: e.to }))
       nodesRef.current = nodes
       linksRef.current = links
 
@@ -288,7 +359,9 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
           'link',
           forceLink<GraphNode, GraphLink>(links)
             .id((d) => d.id)
-            .distance(56),
+            // Folder containment is a looser relationship than a wikilink, so
+            // it gets more room rather than crowding notes into their folder.
+            .distance((l) => (l.structural ? 70 : 56)),
         )
         .force('center', forceCenter(width / 2, height / 2))
         .force('collide', forceCollide<GraphNode>((d) => radiusOf(d) + 6))
@@ -348,9 +421,12 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         drag.node.fy = null
         simRef.current?.alphaTarget(0)
         if (!drag.moved) {
+          // A folder pseudo-node names a place, not a note — nothing to open.
           // Clicking a placeholder writes the note it stands for, which is
           // what following the wikilink itself would have done.
-          if (drag.node.ambiguous) {
+          if (drag.node.folder) {
+            // no-op
+          } else if (drag.node.ambiguous) {
             const matches = matchNotesByTarget(notes, drag.node.title)
             useUiStore.getState().setLinkChoice({
               x: e.clientX,

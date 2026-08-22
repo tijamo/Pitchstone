@@ -72,7 +72,9 @@ export function RightSidebar() {
 
   return (
     <aside
-      className={`sidebar sidebar--right${rightOpen ? '' : ' sidebar--collapsed'}`}
+      className={`sidebar sidebar--right${rightOpen ? '' : ' sidebar--collapsed'}${
+        rightTab === 'graph' ? ' sidebar--graph' : ''
+      }`}
       style={width}
       aria-hidden={!rightOpen}
     >
