@@ -24,11 +24,44 @@ export type NoteMeta = {
   tags: string[]
   created_at: string
   updated_at: string
+  /** A note this one nests under, from frontmatter — see paths.ts buildTree.
+   * null when absent, unresolved, or naming more than one note. */
+  parent: string | null
 }
 
 export type Note = NoteMeta & { content: string }
 
-const META_COLUMNS = 'id, path, title, tags, created_at, updated_at'
+const META_COLUMNS = 'id, path, title, tags, created_at, updated_at, frontmatter'
+
+/** The row shape META_COLUMNS actually selects — frontmatter raw, before
+ * `parent` is picked out of it. */
+type RawMeta = {
+  id: string
+  path: string
+  title: string
+  tags: string[]
+  created_at: string
+  updated_at: string
+  frontmatter: unknown
+}
+
+function parentFrom(frontmatter: unknown): string | null {
+  if (frontmatter && typeof frontmatter === 'object' && 'parent' in frontmatter) {
+    const value = (frontmatter as { parent?: unknown }).parent
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return null
+}
+
+function toMeta(row: RawMeta): NoteMeta {
+  const { frontmatter, ...meta } = row
+  return { ...meta, parent: parentFrom(frontmatter) }
+}
+
+function toNote(row: RawMeta & { content: string }): Note {
+  const { content, ...rest } = row
+  return { ...toMeta(rest), content }
+}
 
 export async function listNotes(): Promise<NoteMeta[]> {
   const { data, error } = await db()
@@ -36,7 +69,7 @@ export async function listNotes(): Promise<NoteMeta[]> {
     .select(META_COLUMNS)
     .order('path')
   if (error) throw error
-  return data ?? []
+  return (data ?? []).map((row) => toMeta(row as RawMeta))
 }
 
 export async function fetchNote(id: string): Promise<Note> {
@@ -46,7 +79,7 @@ export async function fetchNote(id: string): Promise<Note> {
     .eq('id', id)
     .single()
   if (error) throw error
-  return data as Note
+  return toNote(data as RawMeta & { content: string })
 }
 
 export async function createNote(path: string, content = ''): Promise<Note> {
@@ -58,7 +91,7 @@ export async function createNote(path: string, content = ''): Promise<Note> {
   if (error) throw error
   // A new note may satisfy links that were unresolved until it existed.
   await resolveLinks()
-  return data as Note
+  return toNote(data as RawMeta & { content: string })
 }
 
 /**
@@ -75,7 +108,9 @@ export async function saveContent(id: string, content: string): Promise<NoteMeta
     p_links: dedupeLinks(extractLinks(content)),
   })
   if (error) throw error
-  return data as NoteMeta
+  // The RPC returns the full table row (public.pitchstone_notes), frontmatter
+  // included, even though its TypeScript type only names NoteMeta's fields.
+  return toMeta(data as unknown as RawMeta)
 }
 
 export async function renameNote(id: string, path: string): Promise<NoteMeta> {
@@ -88,7 +123,7 @@ export async function renameNote(id: string, path: string): Promise<NoteMeta> {
   if (error) throw error
   // The title changed with the path, so links pointing at either name shift.
   await resolveLinks()
-  return data as NoteMeta
+  return toMeta(data as RawMeta)
 }
 
 export async function deleteNote(id: string): Promise<void> {
@@ -139,7 +174,7 @@ export async function fetchBacklinks(
 
   const target = { title: noteTitle, path: notePath }
   return (sources ?? []).map((source) => {
-    const { content, ...meta } = source as Note
+    const { content, ...meta } = toNote(source as RawMeta & { content: string })
     // A folder-qualified link ("Pitchstone/gotchas") no longer matches this
     // note's bare title as a plain string, so the excerpt is found the same
     // way the link was resolved -- by path, not by string equality.

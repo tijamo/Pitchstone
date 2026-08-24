@@ -85,7 +85,15 @@ export function uniquePath(taken: Set<string>, desired: string): string {
 // Tree building
 // ---------------------------------------------------------------------------
 
-export type TreeFile<T> = { kind: 'file'; name: string; path: string; note: T }
+export type TreeFile<T> = {
+  kind: 'file'
+  name: string
+  path: string
+  note: T
+  /** Other notes nesting under this one via a `parent` frontmatter — see
+   * buildTree. Empty for the overwhelming majority of notes. */
+  children: TreeNode<T>[]
+}
 export type TreeFolder<T> = {
   kind: 'folder'
   name: string
@@ -95,11 +103,27 @@ export type TreeFolder<T> = {
 export type TreeNode<T> = TreeFile<T> | TreeFolder<T>
 
 /**
- * Build a folder tree from a flat list of notes. Folders sort before files, and
- * both sort case-insensitively by name — the same ordering Obsidian uses.
+ * Build a tree from a flat list of notes: folders from path, same as always,
+ * plus a second pass that re-parents any note naming another one in its
+ * `parent` frontmatter — moving it out of wherever its path put it and under
+ * that note instead, the way a folder's contents sit under the folder.
+ *
+ * `matchByTarget` is the caller's `matchNotesByTarget` — passed in rather
+ * than imported, deliberately: paths.ts is also imported directly (with a
+ * `.ts` specifier) by the MCP server's Node-run code, which cannot resolve
+ * this module's own extensionless import of `markdown/resolve.ts` the way
+ * Vite does, so paths.ts stays free of relative imports of its own. A
+ * `parent` that doesn't resolve to exactly one note, names the note itself,
+ * or would close a cycle, is left alone — nesting only helps when it
+ * unambiguously terminates. Folders sort before files, and both sort
+ * case-insensitively by name, at every level.
  */
-export function buildTree<T extends { path: string }>(notes: T[]): TreeNode<T>[] {
+export function buildTree<T extends { path: string; title: string; parent?: string | null }>(
+  notes: T[],
+  matchByTarget: (notes: T[], target: string) => T[],
+): TreeNode<T>[] {
   const root: TreeFolder<T> = { kind: 'folder', name: '', path: '', children: [] }
+  const fileNodes = new Map<T, TreeFile<T>>()
 
   for (const note of notes) {
     const segments = note.path.split('/')
@@ -119,16 +143,90 @@ export function buildTree<T extends { path: string }>(notes: T[]): TreeNode<T>[]
       folder = next
     }
 
-    folder.children.push({
+    const fileNode: TreeFile<T> = {
       kind: 'file',
       name: fileName.replace(/\.md$/, ''),
       path: note.path,
       note,
-    })
+      children: [],
+    }
+    folder.children.push(fileNode)
+    fileNodes.set(note, fileNode)
   }
+
+  reparent(notes, fileNodes, root, matchByTarget)
 
   sortTree(root.children)
   return root.children
+}
+
+function reparent<T extends { path: string; title: string; parent?: string | null }>(
+  notes: T[],
+  fileNodes: Map<T, TreeFile<T>>,
+  root: TreeFolder<T>,
+  matchByTarget: (notes: T[], target: string) => T[],
+): void {
+  // Resolve each note's own single, unambiguous parent first — a bare
+  // "matchByTarget" lookup per note — before moving anything, so cycle
+  // detection below sees the whole chain rather than a tree that is already
+  // being rearranged out from under it.
+  const parentOf = new Map<T, T>()
+  for (const note of notes) {
+    if (!note.parent) continue
+    const matches = matchByTarget(notes, note.parent)
+    if (matches.length !== 1 || matches[0] === note) continue
+    parentOf.set(note, matches[0])
+  }
+  for (const note of [...parentOf.keys()]) {
+    if (!parentOf.has(note)) continue // already cleared by an earlier cycle
+    const seen = new Set<T>([note])
+    let current = parentOf.get(note)
+    while (current) {
+      if (seen.has(current)) {
+        // `seen` is exactly the cycle's membership at this point — every note
+        // walked from `note` up to the repeat. Breaking one link would leave
+        // the rest of the chain still resolving into each other; clearing
+        // all of them is what actually leaves every note where its path
+        // already puts it.
+        for (const cycled of seen) parentOf.delete(cycled)
+        break
+      }
+      seen.add(current)
+      current = parentOf.get(current)
+    }
+  }
+
+  for (const [note, parentNote] of parentOf) {
+    const childNode = fileNodes.get(note)
+    const parentNode = fileNodes.get(parentNote)
+    if (!childNode || !parentNode) continue
+    if (!removeChild(root, childNode)) continue
+    parentNode.children.push(childNode)
+  }
+
+  pruneEmptyFolders(root)
+}
+
+/** Finds and removes `target` from whichever node currently holds it,
+ * wherever in the tree that is. True if it was found. */
+function removeChild<T>(node: TreeFolder<T> | TreeFile<T>, target: TreeNode<T>): boolean {
+  const index = node.children.indexOf(target)
+  if (index !== -1) {
+    node.children.splice(index, 1)
+    return true
+  }
+  return node.children.some(
+    (child) => (child.kind === 'folder' || child.kind === 'file') && removeChild(child, target),
+  )
+}
+
+/** A folder that has been reparented down to nothing doesn't get to exist —
+ * see the file-level note on folders never being stored. */
+function pruneEmptyFolders<T>(node: TreeFolder<T> | TreeFile<T>): void {
+  node.children = node.children.filter((child) => {
+    pruneEmptyFolders(child)
+    return child.kind !== 'folder' || child.children.length > 0
+  })
 }
 
 function sortTree<T>(nodes: TreeNode<T>[]): void {
@@ -136,7 +234,5 @@ function sortTree<T>(nodes: TreeNode<T>[]): void {
     if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
   })
-  for (const node of nodes) {
-    if (node.kind === 'folder') sortTree(node.children)
-  }
+  for (const node of nodes) sortTree(node.children)
 }

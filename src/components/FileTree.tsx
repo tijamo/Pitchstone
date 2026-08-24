@@ -3,11 +3,12 @@ import { buildTree, folderGraphId, type TreeNode } from '../lib/paths'
 import { useVaultStore } from '../store/vaultStore'
 import { useUiStore } from '../store/uiStore'
 import type { NoteMeta } from '../lib/notes'
+import { matchNotesByTarget } from '../lib/markdown/resolve'
 import { Icon } from './Icon'
 
 export function FileTree() {
   const notes = useVaultStore((s) => s.notes)
-  const tree = useMemo(() => buildTree(notes), [notes])
+  const tree = useMemo(() => buildTree(notes, matchNotesByTarget), [notes])
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const toggle = (path: string) =>
@@ -103,6 +104,8 @@ function TreeRow({
   }
 
   const isActive = node.note.id === activeId
+  const hasChildren = node.children.length > 0
+  const isCollapsed = collapsed.has(node.path)
 
   if (node.note.id === renamingId) {
     return (
@@ -129,7 +132,7 @@ function TreeRow({
   }
 
   return (
-    <li role="treeitem" aria-selected={isActive}>
+    <li role="treeitem" aria-selected={isActive} aria-expanded={hasChildren ? !isCollapsed : undefined}>
       <div
         className={`tree__row${isActive ? ' tree__row--active' : ''}`}
         style={indent}
@@ -142,10 +145,18 @@ function TreeRow({
             // so the graph follows it into a branching view centred on it —
             // see GraphView's own focus mode.
             focusGraph(node.note.id)
+            // A note with its own nested notes toggles open the same click
+            // that opens it — there is no separate row just for the chevron.
+            if (hasChildren) onToggle(node.path)
           }}
           onDoubleClick={() => setRenaming(node.note.id)}
           title={node.path}
         >
+          {hasChildren && (
+            <span className={`tree__chevron${isCollapsed ? '' : ' tree__chevron--open'}`}>
+              ▸
+            </span>
+          )}
           <span className="tree__name">{node.name}</span>
         </button>
         <button
@@ -169,6 +180,20 @@ function TreeRow({
           <Icon name="trash" size={13} />
         </button>
       </div>
+
+      {hasChildren && !isCollapsed && (
+        <ul role="group">
+          {node.children.map((child) => (
+            <TreeRow
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              collapsed={collapsed}
+              onToggle={onToggle}
+            />
+          ))}
+        </ul>
+      )}
     </li>
   )
 }

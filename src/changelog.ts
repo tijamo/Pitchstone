@@ -11,6 +11,16 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.11',
+    title: 'Notes under notes',
+    items: [
+      'A note can now nest under another note, not just under a folder: add parent: Some Note to its frontmatter and it moves into the file tree under that note, expandable the same way a folder is.',
+      'The rule for what parent points at is the same one every [[wikilink]] already follows — a bare title, or a folder-qualified one when the title is not unique — so it behaves exactly as expected without new syntax to learn.',
+      "A parent that doesn't resolve to one note, names the note itself, or would close a loop, is left alone rather than guessed at.",
+      'A note created manually with no folder of its own — the ribbon’s "+", the empty-editor button, or a wikilink followed with nothing open — now lands in Memory/Notes instead of the vault root.',
+    ],
+  },
+  {
     ver: '0.10',
     title: 'Focus on one branch of the graph',
     items: [
