@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   forceCenter,
   forceCollide,
@@ -27,6 +27,9 @@ type GraphNode = SimulationNodeDatum & {
   ambiguous: boolean
   /** A pseudo-node standing for a vault folder, not a note — see paths.ts. */
   folder: boolean
+  /** A real note's or folder's vault-relative path, for the hover tooltip.
+   * Absent for an unresolved/ambiguous placeholder — it doesn't have one. */
+  path?: string
 }
 type GraphLink = SimulationLinkDatum<GraphNode> & {
   /** A note-in-folder or folder-in-folder edge, not a [[wikilink]] — drawn
@@ -37,6 +40,8 @@ type GraphLink = SimulationLinkDatum<GraphNode> & {
 const FONT = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
+/** How long the pointer has to sit still on a node before its path shows. */
+const HOVER_DELAY = 500
 
 /**
  * Node labels are clipped to a share of the panel rather than drawn at full
@@ -216,6 +221,22 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   // main effect below has fetched something to filter.
   const applyLayoutRef = useRef<((alpha?: number) => void) | null>(null)
 
+  // The hover-dwell tooltip: a node's path, shown once the pointer has sat
+  // on it a moment rather than the instant it passes over — a graph this
+  // dense would otherwise flash a label on every node the cursor crosses.
+  // Its own panel clips overflow (.sidebar), and the panel can be as narrow
+  // as 180px, so position and width are both clamped to the panel's actual
+  // room rather than just offset from the cursor — a fixed-width tooltip
+  // that assumed a wide panel would get silently cut off in a narrow one.
+  const [tooltip, setTooltip] = useState<{
+    text: string
+    left: number
+    top: number
+    maxWidth: number
+  } | null>(null)
+  const hoveredIdRef = useRef<string | null>(null)
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const noteIds = notes
     .map((n) => n.id)
     .sort()
@@ -354,6 +375,9 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       const all = allNodesRef.current
       if (all.length === 0) return
 
+      // Node membership and positions are both about to change under it.
+      clearHover()
+
       const root = focusRootRef.current
       const rootNode = root ? all.find((n) => n.id === root) : undefined
       const { nodes: simNodes, links: simLinks } = rootNode
@@ -422,6 +446,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         unresolved: false,
         ambiguous: false,
         folder: false,
+        path: n.path,
       }))
       const seen = new Set(nodes.map((n) => n.id))
       for (const e of endpoints) {
@@ -459,6 +484,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
           unresolved: false,
           ambiguous: false,
           folder: true,
+          path,
         }
         folderNodes.set(path, created)
         const parent = dirname(path)
@@ -511,6 +537,17 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       return { x: (sx - t.x) / t.k, y: (sy - t.y) / t.k }
     }
 
+    function clearHover() {
+      if (hoverTimerRef.current != null) {
+        clearTimeout(hoverTimerRef.current)
+        hoverTimerRef.current = null
+      }
+      if (hoveredIdRef.current !== null) {
+        hoveredIdRef.current = null
+        setTooltip(null)
+      }
+    }
+
     function handlePointerDown(e: PointerEvent) {
       canvas!.setPointerCapture(e.pointerId)
       const rect = canvas!.getBoundingClientRect()
@@ -534,15 +571,40 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       const sy = e.clientY - rect.top
 
       if (dragRef.current) {
+        clearHover()
         const world = toWorld(sx, sy)
         dragRef.current.node.fx = world.x
         dragRef.current.node.fy = world.y
         dragRef.current.moved = true
         draw()
       } else if (panRef.current) {
+        clearHover()
         const p = panRef.current
         transformRef.current = { ...transformRef.current, x: p.tx + (sx - p.x), y: p.ty + (sy - p.y) }
         draw()
+      } else {
+        const node = nodeAt(sx, sy)
+        if (node?.id !== hoveredIdRef.current) {
+          clearHover()
+          hoveredIdRef.current = node?.id ?? null
+          // A folder or a real note both have a path worth showing; an
+          // unresolved/ambiguous placeholder doesn't exist yet and has none.
+          if (node?.path != null) {
+            const path = node.path
+            const { width, height } = sizeRef.current
+            const OFFSET = 12
+            // Room enough for a wrapped path even in the narrowest panel —
+            // clamping left/top to leave at least this much keeps the box
+            // inside .graph-view instead of drifting past its clipped edge.
+            const MIN_ROOM = 150
+            const left = Math.min(sx + OFFSET, Math.max(0, width - MIN_ROOM))
+            const top = Math.min(sy + OFFSET, Math.max(0, height - 60))
+            const maxWidth = Math.max(MIN_ROOM, width - left - OFFSET)
+            hoverTimerRef.current = setTimeout(() => {
+              setTooltip({ text: path, left, top, maxWidth })
+            }, HOVER_DELAY)
+          }
+        }
       }
     }
 
@@ -612,6 +674,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     canvas.addEventListener('pointerdown', handlePointerDown)
     canvas.addEventListener('pointermove', handlePointerMove)
     canvas.addEventListener('pointerup', handlePointerUp)
+    canvas.addEventListener('pointerleave', clearHover)
     canvas.addEventListener('dblclick', handleDoubleClick)
     canvas.addEventListener('wheel', handleWheel, { passive: false })
 
@@ -619,9 +682,11 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       cancelled = true
       resizeObserver.disconnect()
       simRef.current?.stop()
+      clearHover()
       canvas.removeEventListener('pointerdown', handlePointerDown)
       canvas.removeEventListener('pointermove', handlePointerMove)
       canvas.removeEventListener('pointerup', handlePointerUp)
+      canvas.removeEventListener('pointerleave', clearHover)
       canvas.removeEventListener('dblclick', handleDoubleClick)
       canvas.removeEventListener('wheel', handleWheel)
     }
@@ -656,6 +721,14 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
           <Icon name="focus" />
         </button>
       </div>
+      {tooltip && (
+        <div
+          className="graph-view__tooltip"
+          style={{ left: tooltip.left, top: tooltip.top, maxWidth: tooltip.maxWidth }}
+        >
+          {tooltip.text}
+        </div>
+      )}
     </div>
   )
 }
