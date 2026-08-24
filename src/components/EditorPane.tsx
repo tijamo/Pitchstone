@@ -97,7 +97,7 @@ export function EditorPane() {
             <span className="empty__hint">
               Pick a note from the sidebar, or create one to start writing.
             </span>
-            <button className="empty__button" onClick={() => void create('')}>
+            <button className="empty__button" onClick={() => void create()}>
               New note
             </button>
           </div>

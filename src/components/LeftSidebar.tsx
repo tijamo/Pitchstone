@@ -57,7 +57,7 @@ export function LeftSidebar() {
               className="tree__action"
               title="New note"
               aria-label="New note"
-              onClick={() => void create('')}
+              onClick={() => void create()}
             >
               <Icon name="file-plus" size={14} />
             </button>

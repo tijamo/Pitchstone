@@ -40,7 +40,7 @@ export function Ribbon() {
         className="icon-button"
         title="New note"
         aria-label="New note"
-        onClick={() => void create('')}
+        onClick={() => void create()}
       >
         <Icon name="file-plus" />
       </button>

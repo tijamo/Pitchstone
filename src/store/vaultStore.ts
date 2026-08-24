@@ -11,6 +11,15 @@ import {
   type NoteMeta,
 } from '../lib/notes'
 import { dirname, joinPath, sanitizeSegment, toPath, uniquePath } from '../lib/paths'
+
+/**
+ * Where a note lands when it's created with no folder context of its own —
+ * the ribbon's "+", the empty-editor "New note" button, and a wikilink
+ * followed with nothing open. A note created *in* a specific folder (the
+ * file tree's per-folder "+") or alongside the note that linked to it is
+ * unaffected; this only covers the otherwise-homeless case.
+ */
+export const DEFAULT_NOTE_FOLDER = 'Memory/Notes'
 import { matchNotesByTarget } from '../lib/markdown/resolve'
 
 export type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
@@ -201,7 +210,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     }
   },
 
-  create: async (dir = '', name) => {
+  create: async (dir = DEFAULT_NOTE_FOLDER, name) => {
     // A queued write belongs to the note being left behind, not the new one.
     await get().flush()
     try {
@@ -256,7 +265,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       return
     }
     const active = state.notes.find((n) => n.id === state.activeId)
-    await state.create(active ? dirname(active.path) : '', trimmed)
+    await state.create(active ? dirname(active.path) : DEFAULT_NOTE_FOLDER, trimmed)
   },
 
   rename: async (id, input) => {
