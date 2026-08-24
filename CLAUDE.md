@@ -147,8 +147,12 @@ Memory/
                     /decisions.md   ← append-only, dated
                     /gotchas.md     ← things that bit us
   Patterns/<topic>.md               ← what carries across projects
-  Daily/YYYY-MM-DD.md               ← thin journal, links out. Optional.
 ```
+
+A dated, cross-project session log (`Memory/Sessions/*`) was tried and retired
+on 2026-08-24 — it pulled against the point of `state.md` being the one thing
+a cold session reads, by giving a project fact a second place to live. See
+`Memory/Projects/Pitchstone/decisions.md` in the vault for the full reasoning.
 
 **`state.md` is the one that earns its keep** — stack, deploy targets, what is
 done, what is mid-flight, what is blocked — and it is the read path that
@@ -165,8 +169,8 @@ and `state.md` disagree, `state.md` is right and the log is history.
 Conventions that keep it usable:
 
 - **Rewrite `state.md`; append everything else** — `write_note` with
-  `mode: "append"` for `decisions.md`, `gotchas.md`, and daily notes.
-  Rewriting one of those loses what's already in it.
+  `mode: "append"` for `decisions.md` and `gotchas.md`. Rewriting one of
+  those loses what's already in it.
 - **Tag every memory note `#memory`**, plus a project tag (`#pitchstone`,
   `#dodo`). `list_tags` is how a cold session finds what's already there.
 - **Search before writing.** `search_notes` first: the vault very often already
