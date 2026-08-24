@@ -5,6 +5,7 @@ import {
   DEFAULT_RIGHT_WIDTH,
   MAX_PANEL_WIDTH,
   MIN_PANEL_WIDTH,
+  maxRightWidth,
 } from '../store/uiStore'
 
 /** How much one arrow-key press moves the edge. */
@@ -21,6 +22,11 @@ const KEY_STEP = 16
 export function Resizer({ side }: { side: 'left' | 'right' }) {
   const width = useUiStore((s) => (side === 'left' ? s.leftWidth : s.rightWidth))
   const setWidth = useUiStore((s) => (side === 'left' ? s.setLeftWidth : s.setRightWidth))
+  // The right panel's own cap floats with the window and the left sidebar's
+  // width — see maxRightWidth. Only its aria value needs it; the store's own
+  // setRightWidth re-derives and enforces the real max on every drag.
+  const leftReserved = useUiStore((s) => (s.leftOpen ? s.leftWidth : 0))
+  const max = side === 'left' ? MAX_PANEL_WIDTH : maxRightWidth(leftReserved)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const [dragging, setDragging] = useState(false)
 
@@ -40,7 +46,7 @@ export function Resizer({ side }: { side: 'left' | 'right' }) {
       aria-label={`Resize ${side} sidebar`}
       aria-valuenow={width}
       aria-valuemin={MIN_PANEL_WIDTH}
-      aria-valuemax={MAX_PANEL_WIDTH}
+      aria-valuemax={max}
       tabIndex={0}
       onPointerDown={(e) => {
         // Without this the drag starts a text selection in the panel behind.

@@ -40,8 +40,26 @@ export function isMobileWidth(): boolean {
 export const MIN_PANEL_WIDTH = 180
 export const MAX_PANEL_WIDTH = 560
 
-export function clampWidth(width: number): number {
-  return Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, Math.round(width)))
+export function clampWidth(width: number, max = MAX_PANEL_WIDTH): number {
+  return Math.min(max, Math.max(MIN_PANEL_WIDTH, Math.round(width)))
+}
+
+const RIBBON_WIDTH = 44
+/** However narrow the editor is allowed to get before it stops giving up room. */
+const MIN_EDITOR_WIDTH = 360
+
+/**
+ * The right panel's own cap — much larger than the left's, because the graph
+ * that lives there benefits from real width the way a file list or backlinks
+ * panel never would. It floats with the window rather than a fixed number:
+ * whatever's left after the ribbon, the left sidebar (if open), and enough
+ * room that the editor is never squeezed away entirely. Never smaller than
+ * the ordinary max, so a narrow window behaves exactly as it did before.
+ */
+export function maxRightWidth(leftReserved: number): number {
+  if (typeof window === 'undefined') return MAX_PANEL_WIDTH
+  const available = window.innerWidth - RIBBON_WIDTH - leftReserved - MIN_EDITOR_WIDTH
+  return Math.max(MAX_PANEL_WIDTH, Math.round(available))
 }
 
 function storedTheme(): Theme | null {
@@ -49,9 +67,9 @@ function storedTheme(): Theme | null {
   return value === 'dark' || value === 'light' ? value : null
 }
 
-function storedWidth(key: string, fallback: number): number {
+function storedWidth(key: string, fallback: number, max = MAX_PANEL_WIDTH): number {
   const value = Number(localStorage.getItem(key))
-  return Number.isFinite(value) && value > 0 ? clampWidth(value) : fallback
+  return Number.isFinite(value) && value > 0 ? clampWidth(value, max) : fallback
 }
 
 type UiState = {
@@ -97,17 +115,23 @@ type UiState = {
 // Both sidebars start open on a desktop and closed on a phone, where they are
 // drawers over the editor rather than columns beside it.
 const startMobile = isMobileWidth()
+const startLeftOpen = !startMobile
+const startLeftWidth = storedWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT_WIDTH)
 
-export const useUiStore = create<UiState>((set) => ({
+export const useUiStore = create<UiState>((set, get) => ({
   mobile: startMobile,
   leftTab: 'files',
   // The graph is the most useful thing to land on: it shows the whole vault
   // rather than one note's neighbours, and backlinks are one click away.
   rightTab: 'graph',
-  leftOpen: !startMobile,
+  leftOpen: startLeftOpen,
   rightOpen: !startMobile,
-  leftWidth: storedWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT_WIDTH),
-  rightWidth: storedWidth(RIGHT_WIDTH_KEY, DEFAULT_RIGHT_WIDTH),
+  leftWidth: startLeftWidth,
+  rightWidth: storedWidth(
+    RIGHT_WIDTH_KEY,
+    DEFAULT_RIGHT_WIDTH,
+    maxRightWidth(startLeftOpen ? startLeftWidth : 0),
+  ),
   theme: storedTheme(),
   settingsOpen: false,
   linkChoice: null,
@@ -151,7 +175,9 @@ export const useUiStore = create<UiState>((set) => ({
   },
 
   setRightWidth: (width) => {
-    const rightWidth = clampWidth(width)
+    const s = get()
+    const max = s.mobile ? MAX_PANEL_WIDTH : maxRightWidth(s.leftOpen ? s.leftWidth : 0)
+    const rightWidth = clampWidth(width, max)
     localStorage.setItem(RIGHT_WIDTH_KEY, String(rightWidth))
     set({ rightWidth })
   },
