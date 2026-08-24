@@ -11,6 +11,15 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.10',
+    title: 'Focus on one branch of the graph',
+    items: [
+      'Double-click a note in the graph to see just it and the notes connected to it, radiating outward as branches with no cross-links between them — the rest of the vault steps out of the way. Double-click empty canvas, or the crosshair button in the corner, to go back to the whole graph.',
+      'Opening a note from the file tree does the same: the graph, wherever you look at it next, is already centred on what you just opened.',
+      'Where two branches both lead to the same note, it appears once — reached by whichever path the graph found first — rather than drawing a link back across from the other branch too.',
+    ],
+  },
+  {
     ver: '0.9',
     title: 'When two notes share a name',
     items: [

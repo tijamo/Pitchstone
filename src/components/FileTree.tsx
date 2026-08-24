@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { buildTree, type TreeNode } from '../lib/paths'
 import { useVaultStore } from '../store/vaultStore'
+import { useUiStore } from '../store/uiStore'
 import type { NoteMeta } from '../lib/notes'
 import { Icon } from './Icon'
 
@@ -50,6 +51,7 @@ function TreeRow({
   const remove = useVaultStore((s) => s.remove)
   const setRenaming = useVaultStore((s) => s.setRenaming)
   const create = useVaultStore((s) => s.create)
+  const setGraphFocus = useUiStore((s) => s.setGraphFocus)
 
   const indent = { paddingLeft: 6 + depth * 14 }
 
@@ -129,7 +131,13 @@ function TreeRow({
       >
         <button
           className="tree__label"
-          onClick={() => void open(node.note.id)}
+          onClick={() => {
+            void open(node.note.id)
+            // Selecting a note here is a deliberate "look at this one" action,
+            // so the graph follows it into a branching view centred on it —
+            // see GraphView's own focus mode.
+            setGraphFocus(true)
+          }}
           onDoubleClick={() => setRenaming(node.note.id)}
           title={node.path}
         >

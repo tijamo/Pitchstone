@@ -15,6 +15,7 @@ import { listLinks } from '../lib/notes'
 import type { NoteMeta } from '../lib/notes'
 import { matchNotesByTarget } from '../lib/markdown/resolve'
 import { basename, dirname } from '../lib/paths'
+import { Icon } from './Icon'
 
 type GraphNode = SimulationNodeDatum & {
   id: string
@@ -67,6 +68,49 @@ function fitLabel(
   return label
 }
 
+/**
+ * The focused view: a spanning tree of [[wikilink]] connections rooted at
+ * `rootId`, radiating outward with no cross-links between branches. Found by
+ * a plain BFS over the (undirected) link graph — the first edge to reach a
+ * node is the only one kept, so two branches that both lead to the same note
+ * never draw a connecting edge between them. Folder containment is excluded:
+ * it groups notes by where they live, not by what they mean to each other,
+ * so it isn't a "branch" in the sense this view is for.
+ */
+function buildFocusTree(
+  nodes: GraphNode[],
+  links: GraphLink[],
+  rootId: string,
+): { nodes: GraphNode[]; links: GraphLink[] } {
+  const idOf = (end: GraphNode | string) => (typeof end === 'string' ? end : end.id)
+
+  const adjacency = new Map<string, { link: GraphLink; otherId: string }[]>()
+  for (const link of links) {
+    if (link.structural) continue
+    const s = idOf(link.source as GraphNode | string)
+    const t = idOf(link.target as GraphNode | string)
+    if (!adjacency.has(s)) adjacency.set(s, [])
+    if (!adjacency.has(t)) adjacency.set(t, [])
+    adjacency.get(s)!.push({ link, otherId: t })
+    adjacency.get(t)!.push({ link, otherId: s })
+  }
+
+  const visited = new Set([rootId])
+  const treeLinks: GraphLink[] = []
+  const queue = [rootId]
+  while (queue.length > 0) {
+    const current = queue.shift()!
+    for (const { link, otherId } of adjacency.get(current) ?? []) {
+      if (visited.has(otherId)) continue
+      visited.add(otherId)
+      treeLinks.push(link)
+      queue.push(otherId)
+    }
+  }
+
+  return { nodes: nodes.filter((n) => visited.has(n.id)), links: treeLinks }
+}
+
 export function GraphView() {
   const notes = useVaultStore((s) => s.notes)
 
@@ -89,12 +133,28 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   const open = useVaultStore((s) => s.open)
   const openOrCreate = useVaultStore((s) => s.openOrCreate)
   const linksVersion = useVaultStore((s) => s.linksVersion)
+  const graphFocus = useUiStore((s) => s.graphFocus)
+  const setGraphFocus = useUiStore((s) => s.setGraphFocus)
+
+  // Which note the focused view is rooted at — the open note, only while
+  // focus mode is on. Kept as its own value (rather than reading graphFocus
+  // and activeId separately downstream) so relayout only fires when this
+  // actually changes: activeId moving around while focus mode is off must
+  // not touch the graph at all.
+  const focusRoot = graphFocus ? activeId : null
 
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const activeIdRef = useRef(activeId)
   activeIdRef.current = activeId
+  const focusRootRef = useRef(focusRoot)
+  focusRootRef.current = focusRoot
 
+  // The full graph, as fetched — nodesRef/linksRef below are what's actually
+  // laid out and drawn, which is this filtered down to the focus tree when
+  // focus mode is on.
+  const allNodesRef = useRef<GraphNode[]>([])
+  const allLinksRef = useRef<GraphLink[]>([])
   const nodesRef = useRef<GraphNode[]>([])
   const linksRef = useRef<GraphLink[]>([])
   const sizeRef = useRef({ width: 0, height: 0 })
@@ -102,6 +162,10 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   const dragRef = useRef<{ node: GraphNode; moved: boolean } | null>(null)
   const panRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null)
   const simRef = useRef<Simulation<GraphNode, GraphLink> | null>(null)
+  // Re-applies the current focus filter to the already-fetched graph and
+  // restarts the simulation, without a network round trip — set once the
+  // main effect below has fetched something to filter.
+  const applyLayoutRef = useRef<((alpha?: number) => void) | null>(null)
 
   const noteIds = notes
     .map((n) => n.id)
@@ -233,6 +297,45 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       draw()
     }
 
+    // Applies the current focus root (a ref, so this always sees the latest
+    // value without needing to be redeclared) to whatever was last fetched,
+    // and (re)starts the simulation. Called after every fetch, and by the
+    // separate focus-only effect below when just the root changes.
+    function applyLayout(alpha = 1) {
+      const all = allNodesRef.current
+      if (all.length === 0) return
+
+      const root = focusRootRef.current
+      const rootNode = root ? all.find((n) => n.id === root && !n.folder) : undefined
+      const { nodes: simNodes, links: simLinks } = rootNode
+        ? buildFocusTree(all, allLinksRef.current, rootNode.id)
+        : { nodes: all, links: allLinksRef.current }
+
+      nodesRef.current = simNodes
+      linksRef.current = simLinks
+
+      const { width, height } = sizeRef.current
+      simRef.current?.stop()
+      simRef.current = forceSimulation(simNodes)
+        .force('charge', forceManyBody().strength(-140))
+        .force(
+          'link',
+          forceLink<GraphNode, GraphLink>(simLinks)
+            .id((d) => d.id)
+            // Folder containment is a looser relationship than a wikilink, so
+            // it gets more room rather than crowding notes into their folder.
+            .distance((l) => (l.structural ? 70 : 56)),
+        )
+        .force('center', forceCenter(width / 2, height / 2))
+        .force('collide', forceCollide<GraphNode>((d) => radiusOf(d) + 6))
+        .on('tick', draw)
+        .alpha(alpha)
+        .restart()
+
+      resize()
+    }
+    applyLayoutRef.current = applyLayout
+
     const resizeObserver = new ResizeObserver(resize)
     resizeObserver.observe(container)
 
@@ -348,30 +451,11 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         carried++
       }
 
-      nodesRef.current = nodes
-      linksRef.current = links
-
-      const { width, height } = sizeRef.current
-      simRef.current?.stop()
-      simRef.current = forceSimulation(nodes)
-        .force('charge', forceManyBody().strength(-140))
-        .force(
-          'link',
-          forceLink<GraphNode, GraphLink>(links)
-            .id((d) => d.id)
-            // Folder containment is a looser relationship than a wikilink, so
-            // it gets more room rather than crowding notes into their folder.
-            .distance((l) => (l.structural ? 70 : 56)),
-        )
-        .force('center', forceCenter(width / 2, height / 2))
-        .force('collide', forceCollide<GraphNode>((d) => radiusOf(d) + 6))
-        .on('tick', draw)
-        // A first layout needs the full run; a refresh of a graph already on
-        // screen only needs to settle the part that moved.
-        .alpha(carried > 0 ? 0.25 : 1)
-        .restart()
-
-      resize()
+      allNodesRef.current = nodes
+      allLinksRef.current = links
+      // A first layout needs the full run; a refresh of a graph already on
+      // screen only needs to settle the part that moved.
+      applyLayout(carried > 0 ? 0.25 : 1)
     })
 
     function toWorld(sx: number, sy: number) {
@@ -445,6 +529,23 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       panRef.current = null
     }
 
+    // Focus mode's own entry/exit gesture — deliberately separate from the
+    // plain click above (which already opens a note): a double-click on a
+    // note commits to viewing just its branches, and one on empty canvas
+    // backs back out to the whole graph.
+    function handleDoubleClick(e: MouseEvent) {
+      const rect = canvas!.getBoundingClientRect()
+      const sx = e.clientX - rect.left
+      const sy = e.clientY - rect.top
+      const node = nodeAt(sx, sy)
+      if (node && !node.folder && !node.unresolved) {
+        void open(node.id)
+        setGraphFocus(true)
+      } else if (!node) {
+        setGraphFocus(false)
+      }
+    }
+
     function handleWheel(e: WheelEvent) {
       e.preventDefault()
       const rect = canvas!.getBoundingClientRect()
@@ -461,6 +562,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     canvas.addEventListener('pointerdown', handlePointerDown)
     canvas.addEventListener('pointermove', handlePointerMove)
     canvas.addEventListener('pointerup', handlePointerUp)
+    canvas.addEventListener('dblclick', handleDoubleClick)
     canvas.addEventListener('wheel', handleWheel, { passive: false })
 
     return () => {
@@ -470,6 +572,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       canvas.removeEventListener('pointerdown', handlePointerDown)
       canvas.removeEventListener('pointermove', handlePointerMove)
       canvas.removeEventListener('pointerup', handlePointerUp)
+      canvas.removeEventListener('dblclick', handleDoubleClick)
       canvas.removeEventListener('wheel', handleWheel)
     }
     // Re-run when the set of notes changes, and when anything may have
@@ -479,9 +582,30 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteIds, linksVersion])
 
+  // A focus change (entering/leaving focus mode, or the open note changing
+  // while it's on) only needs the already-fetched graph re-filtered and the
+  // simulation restarted — not a refetch, which is a real network round trip
+  // and would make selecting notes feel laggy.
+  useEffect(() => {
+    applyLayoutRef.current?.()
+  }, [focusRoot])
+
   return (
     <div ref={containerRef} className="graph-view">
       <canvas ref={canvasRef} className="graph-view__canvas" />
+      <div className="graph-view__toolbar">
+        <button
+          type="button"
+          className={`icon-button${graphFocus ? ' icon-button--active' : ''}`}
+          title={graphFocus ? 'Show full graph' : 'Focus on the open note'}
+          aria-label={graphFocus ? 'Show full graph' : 'Focus on the open note'}
+          aria-pressed={graphFocus}
+          disabled={!graphFocus && !activeId}
+          onClick={() => setGraphFocus(!graphFocus)}
+        >
+          <Icon name="focus" />
+        </button>
+      </div>
     </div>
   )
 }

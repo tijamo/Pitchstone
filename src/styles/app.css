@@ -799,6 +799,22 @@ button {
   cursor: grabbing;
 }
 
+.graph-view__toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.graph-view__toolbar .icon-button {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+}
+
+.graph-view__toolbar .icon-button:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 /* ---------- Settings modal ---------- */
 
 .modal {

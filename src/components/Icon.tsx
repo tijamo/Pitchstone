@@ -9,6 +9,7 @@ export type IconName =
   | 'files'
   | 'search'
   | 'graph'
+  | 'focus'
   | 'tag'
   | 'links'
   | 'list'
@@ -46,6 +47,12 @@ const PATHS: Record<IconName, ReactElement> = {
       <circle cx="18" cy="9" r="2.5" />
       <circle cx="9" cy="18" r="2.5" />
       <path d="M8.2 7.1 15.8 8M7.4 8.2 8.2 15.6" />
+    </>
+  ),
+  focus: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
     </>
   ),
   tag: (

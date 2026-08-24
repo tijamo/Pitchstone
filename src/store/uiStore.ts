@@ -67,6 +67,8 @@ type UiState = {
   theme: Theme | null
   settingsOpen: boolean
   linkChoice: LinkChoice | null
+  /** Graph shows a branching tree rooted at the open note, not the whole vault. */
+  graphFocus: boolean
   setLeftTab: (tab: LeftTab) => void
   setRightTab: (tab: RightTab) => void
   toggleLeft: () => void
@@ -79,6 +81,7 @@ type UiState = {
   closePanels: () => void
   setLinkChoice: (choice: LinkChoice) => void
   clearLinkChoice: () => void
+  setGraphFocus: (focus: boolean) => void
 }
 
 // Both sidebars start open on a desktop and closed on a phone, where they are
@@ -98,6 +101,7 @@ export const useUiStore = create<UiState>((set) => ({
   theme: storedTheme(),
   settingsOpen: false,
   linkChoice: null,
+  graphFocus: false,
 
   // Selecting a tab also reveals the sidebar if it was collapsed, so the ribbon
   // buttons always do something visible. On a phone the two panels are drawers
@@ -126,6 +130,7 @@ export const useUiStore = create<UiState>((set) => ({
 
   setLinkChoice: (linkChoice) => set({ linkChoice }),
   clearLinkChoice: () => set({ linkChoice: null }),
+  setGraphFocus: (graphFocus) => set({ graphFocus }),
 
   setLeftWidth: (width) => {
     const leftWidth = clampWidth(width)
