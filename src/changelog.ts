@@ -14,8 +14,9 @@ export const changelog: ChangelogEntry[] = [
     ver: '0.10',
     title: 'Focus on one branch of the graph',
     items: [
-      'Double-click a note in the graph to see just it and the notes connected to it, radiating outward as branches with no cross-links between them — the rest of the vault steps out of the way. Double-click empty canvas, or the crosshair button in the corner, to go back to the whole graph.',
-      'Opening a note from the file tree does the same: the graph, wherever you look at it next, is already centred on what you just opened.',
+      'Double-click a node in the graph — a note, a folder, or a link to something not written yet — to see just it and what connects to it, radiating outward as branches with no cross-links between them. Double-click empty canvas, or the crosshair button in the corner, to go back to the whole graph.',
+      'A folder focuses on its own contents: what it holds (and what those notes link to from there), not the folder-mates of one note inside it.',
+      'Selecting a note or folder from the file tree does the same: the graph, wherever you look at it next, is already centred on what you just picked.',
       'Where two branches both lead to the same note, it appears once — reached by whichever path the graph found first — rather than drawing a link back across from the other branch too.',
     ],
   },

@@ -67,8 +67,16 @@ type UiState = {
   theme: Theme | null
   settingsOpen: boolean
   linkChoice: LinkChoice | null
-  /** Graph shows a branching tree rooted at the open note, not the whole vault. */
+  /** Graph shows a branching tree rooted at graphFocusId, not the whole vault. */
   graphFocus: boolean
+  /**
+   * What that tree is rooted at — a note id, a folder's `folder:<path>` id, or
+   * an unresolved/ambiguous link's `unresolved:<title>` id (see GraphView).
+   * null defers to whichever note is open. Kept separate from vaultStore's
+   * activeId because a folder or a not-yet-written link has no note to be
+   * "active" — this is the only way to point the graph at one of those.
+   */
+  graphFocusId: string | null
   setLeftTab: (tab: LeftTab) => void
   setRightTab: (tab: RightTab) => void
   toggleLeft: () => void
@@ -82,6 +90,8 @@ type UiState = {
   setLinkChoice: (choice: LinkChoice) => void
   clearLinkChoice: () => void
   setGraphFocus: (focus: boolean) => void
+  /** Focus the graph on a specific node id and turn focus mode on. */
+  focusGraph: (id: string) => void
 }
 
 // Both sidebars start open on a desktop and closed on a phone, where they are
@@ -102,6 +112,7 @@ export const useUiStore = create<UiState>((set) => ({
   settingsOpen: false,
   linkChoice: null,
   graphFocus: false,
+  graphFocusId: null,
 
   // Selecting a tab also reveals the sidebar if it was collapsed, so the ribbon
   // buttons always do something visible. On a phone the two panels are drawers
@@ -131,6 +142,7 @@ export const useUiStore = create<UiState>((set) => ({
   setLinkChoice: (linkChoice) => set({ linkChoice }),
   clearLinkChoice: () => set({ linkChoice: null }),
   setGraphFocus: (graphFocus) => set({ graphFocus }),
+  focusGraph: (id) => set({ graphFocus: true, graphFocusId: id }),
 
   setLeftWidth: (width) => {
     const leftWidth = clampWidth(width)

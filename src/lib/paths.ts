@@ -31,6 +31,17 @@ export function joinPath(dir: string, name: string): string {
   return dir ? `${dir}/${name}` : name
 }
 
+/**
+ * The id GraphView gives a folder's pseudo-node, keyed by path since folders
+ * are never stored (see above) and so have no id of their own. Exported so
+ * anything that wants to point the graph at a folder — the file tree's own
+ * click handler, at least — builds the same id GraphView does, rather than
+ * the two silently disagreeing about what a folder's node is called.
+ */
+export function folderGraphId(path: string): string {
+  return `folder:${path}`
+}
+
 /** Strip characters the vault cannot represent, and collapse whitespace. */
 export function sanitizeSegment(name: string): string {
   return name.replace(ILLEGAL, '').replace(/\s+/g, ' ').trim()

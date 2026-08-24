@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { buildTree, type TreeNode } from '../lib/paths'
+import { buildTree, folderGraphId, type TreeNode } from '../lib/paths'
 import { useVaultStore } from '../store/vaultStore'
 import { useUiStore } from '../store/uiStore'
 import type { NoteMeta } from '../lib/notes'
@@ -51,7 +51,7 @@ function TreeRow({
   const remove = useVaultStore((s) => s.remove)
   const setRenaming = useVaultStore((s) => s.setRenaming)
   const create = useVaultStore((s) => s.create)
-  const setGraphFocus = useUiStore((s) => s.setGraphFocus)
+  const focusGraph = useUiStore((s) => s.focusGraph)
 
   const indent = { paddingLeft: 6 + depth * 14 }
 
@@ -62,7 +62,12 @@ function TreeRow({
         <div className="tree__row tree__row--folder" style={indent}>
           <button
             className="tree__label"
-            onClick={() => onToggle(node.path)}
+            onClick={() => {
+              onToggle(node.path)
+              // A folder has no note to open, but it is still a real node in
+              // the graph — see GraphView's focus mode.
+              focusGraph(folderGraphId(node.path))
+            }}
             title={node.path}
           >
             <span className={`tree__chevron${isCollapsed ? '' : ' tree__chevron--open'}`}>
@@ -136,7 +141,7 @@ function TreeRow({
             // Selecting a note here is a deliberate "look at this one" action,
             // so the graph follows it into a branching view centred on it —
             // see GraphView's own focus mode.
-            setGraphFocus(true)
+            focusGraph(node.note.id)
           }}
           onDoubleClick={() => setRenaming(node.note.id)}
           title={node.path}

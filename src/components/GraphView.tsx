@@ -14,7 +14,7 @@ import { useUiStore } from '../store/uiStore'
 import { listLinks } from '../lib/notes'
 import type { NoteMeta } from '../lib/notes'
 import { matchNotesByTarget } from '../lib/markdown/resolve'
-import { basename, dirname } from '../lib/paths'
+import { basename, dirname, folderGraphId } from '../lib/paths'
 import { Icon } from './Icon'
 
 type GraphNode = SimulationNodeDatum & {
@@ -69,20 +69,55 @@ function fitLabel(
 }
 
 /**
- * The focused view: a spanning tree of [[wikilink]] connections rooted at
- * `rootId`, radiating outward with no cross-links between branches. Found by
- * a plain BFS over the (undirected) link graph — the first edge to reach a
- * node is the only one kept, so two branches that both lead to the same note
- * never draw a connecting edge between them. Folder containment is excluded:
- * it groups notes by where they live, not by what they mean to each other,
- * so it isn't a "branch" in the sense this view is for.
+ * The focused view: a spanning tree radiating outward from `rootId`, with no
+ * cross-links between branches. Found by a plain BFS over the link graph —
+ * the first edge to reach a node is the only one kept, so two branches that
+ * both lead to the same note never draw a connecting edge between them.
+ *
+ * Folder containment is excluded from a *note's* tree — it groups notes by
+ * where they live, not by what they mean to each other, so it isn't a
+ * "branch" in the sense this view is for. But when the root itself is a
+ * folder, containment is the only thing it has to radiate out through: its
+ * contents (recursively, so a sub-folder's notes count too) are gathered
+ * first via containment, and each of those notes then seeds an ordinary
+ * [[wikilink]] BFS of its own, exactly as if it had been focused directly.
  */
 function buildFocusTree(
   nodes: GraphNode[],
   links: GraphLink[],
   rootId: string,
 ): { nodes: GraphNode[]; links: GraphLink[] } {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
   const idOf = (end: GraphNode | string) => (typeof end === 'string' ? end : end.id)
+
+  const visited = new Set([rootId])
+  const treeLinks: GraphLink[] = []
+  const seeds = [rootId]
+
+  if (byId.get(rootId)?.folder) {
+    // A containment edge points child -> its folder (see the note/folder
+    // links built above), so a folder's own contents are found by walking
+    // those edges backwards: everything whose edge targets this folder.
+    const childrenOf = new Map<string, { link: GraphLink; otherId: string }[]>()
+    for (const link of links) {
+      if (!link.structural) continue
+      const s = idOf(link.source as GraphNode | string)
+      const t = idOf(link.target as GraphNode | string)
+      if (!childrenOf.has(t)) childrenOf.set(t, [])
+      childrenOf.get(t)!.push({ link, otherId: s })
+    }
+    const queue = [rootId]
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      for (const { link, otherId } of childrenOf.get(current) ?? []) {
+        if (visited.has(otherId)) continue
+        visited.add(otherId)
+        treeLinks.push(link)
+        queue.push(otherId)
+        if (!byId.get(otherId)?.folder) seeds.push(otherId)
+      }
+    }
+  }
 
   const adjacency = new Map<string, { link: GraphLink; otherId: string }[]>()
   for (const link of links) {
@@ -95,9 +130,7 @@ function buildFocusTree(
     adjacency.get(t)!.push({ link, otherId: s })
   }
 
-  const visited = new Set([rootId])
-  const treeLinks: GraphLink[] = []
-  const queue = [rootId]
+  const queue = [...seeds]
   while (queue.length > 0) {
     const current = queue.shift()!
     for (const { link, otherId } of adjacency.get(current) ?? []) {
@@ -134,14 +167,16 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   const openOrCreate = useVaultStore((s) => s.openOrCreate)
   const linksVersion = useVaultStore((s) => s.linksVersion)
   const graphFocus = useUiStore((s) => s.graphFocus)
+  const graphFocusId = useUiStore((s) => s.graphFocusId)
   const setGraphFocus = useUiStore((s) => s.setGraphFocus)
 
-  // Which note the focused view is rooted at — the open note, only while
-  // focus mode is on. Kept as its own value (rather than reading graphFocus
-  // and activeId separately downstream) so relayout only fires when this
-  // actually changes: activeId moving around while focus mode is off must
-  // not touch the graph at all.
-  const focusRoot = graphFocus ? activeId : null
+  // Which node the focused view is rooted at, only while focus mode is on.
+  // graphFocusId is an explicit choice — set by double-clicking a node here,
+  // or by selecting a note or folder in the file tree — and it can name a
+  // folder or an unresolved link that vaultStore has no "active" concept of
+  // at all. Falling back to the open note only covers the plain case: the
+  // crosshair toggle turned on with nothing explicitly focused yet.
+  const focusRoot = graphFocus ? (graphFocusId ?? activeId) : null
 
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -306,7 +341,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       if (all.length === 0) return
 
       const root = focusRootRef.current
-      const rootNode = root ? all.find((n) => n.id === root && !n.folder) : undefined
+      const rootNode = root ? all.find((n) => n.id === root) : undefined
       const { nodes: simNodes, links: simLinks } = rootNode
         ? buildFocusTree(all, allLinksRef.current, rootNode.id)
         : { nodes: all, links: allLinksRef.current }
@@ -400,12 +435,11 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       // most of what sits under Memory/Projects/<Project>/, for instance — a
       // reason to sit near each other on the graph anyway.
       const folderNodes = new Map<string, GraphNode>()
-      const folderId = (path: string) => `folder:${path}`
       function ensureFolder(path: string): GraphNode {
         const existing = folderNodes.get(path)
         if (existing) return existing
         const created: GraphNode = {
-          id: folderId(path),
+          id: folderGraphId(path),
           title: basename(path),
           degree: 0,
           unresolved: false,
@@ -530,18 +564,20 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     }
 
     // Focus mode's own entry/exit gesture — deliberately separate from the
-    // plain click above (which already opens a note): a double-click on a
-    // note commits to viewing just its branches, and one on empty canvas
-    // backs back out to the whole graph.
+    // plain click above (which already opens a note): a double-click on any
+    // node, note or not, commits to viewing just its branches, and one on
+    // empty canvas backs back out to the whole graph. A folder or an
+    // unresolved/ambiguous placeholder has no note to open, so only a real
+    // note's double-click also opens it.
     function handleDoubleClick(e: MouseEvent) {
       const rect = canvas!.getBoundingClientRect()
       const sx = e.clientX - rect.left
       const sy = e.clientY - rect.top
       const node = nodeAt(sx, sy)
-      if (node && !node.folder && !node.unresolved) {
-        void open(node.id)
-        setGraphFocus(true)
-      } else if (!node) {
+      if (node) {
+        if (!node.folder && !node.unresolved) void open(node.id)
+        useUiStore.getState().focusGraph(node.id)
+      } else {
         setGraphFocus(false)
       }
     }
@@ -600,7 +636,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
           title={graphFocus ? 'Show full graph' : 'Focus on the open note'}
           aria-label={graphFocus ? 'Show full graph' : 'Focus on the open note'}
           aria-pressed={graphFocus}
-          disabled={!graphFocus && !activeId}
+          disabled={!graphFocus && !graphFocusId && !activeId}
           onClick={() => setGraphFocus(!graphFocus)}
         >
           <Icon name="focus" />
