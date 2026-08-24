@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Icon } from './Icon'
 import { useUiStore, type Theme } from '../store/uiStore'
+import { useApprovalStore } from '../store/approvalStore'
 import { describeError } from '../lib/notes'
 import { createToken, listTokens, revokeToken, type ApiToken } from '../lib/tokens'
 
@@ -47,6 +48,7 @@ export function SettingsModal() {
 
         <Appearance />
         <ClaudeAccess />
+        <UserManagement />
         <About />
       </div>
     </div>
@@ -200,6 +202,81 @@ function ClaudeAccess() {
       )}
       {tokens?.length === 0 && !secret && (
         <p className="modal__note modal__note--faint">No tokens yet.</p>
+      )}
+    </section>
+  )
+}
+
+/**
+ * Only the owner has anything to see here — `pending` is fetched and kept
+ * live only for them (see approvalStore), so a member's list is always
+ * empty and this renders nothing rather than an always-empty section.
+ */
+function UserManagement() {
+  const isOwner = useApprovalStore((s) => s.isOwner)
+  const pending = useApprovalStore((s) => s.pending)
+  const approve = useApprovalStore((s) => s.approve)
+  const reject = useApprovalStore((s) => s.reject)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!isOwner) return null
+
+  const decide = async (userId: string, action: 'approve' | 'reject') => {
+    setBusyId(userId)
+    setError(null)
+    try {
+      await (action === 'approve' ? approve(userId) : reject(userId))
+    } catch (e) {
+      setError(describeError(e))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <section className="modal__section">
+      <h3 className="modal__heading">
+        <Icon name="users" size={14} /> User management
+      </h3>
+      <p className="modal__note">
+        Approving a sign-up gives it access to Pitchstone, and to every other Tijamo app that
+        shares this account.
+      </p>
+
+      {error && <p className="gate__error">{error}</p>}
+
+      {pending.length === 0 ? (
+        <p className="modal__note modal__note--faint">No sign-ups waiting.</p>
+      ) : (
+        <ul className="approval-list">
+          {pending.map((account) => (
+            <li key={account.user_id} className="approval-list__row">
+              <span className="approval-list__info">
+                <span className="approval-list__email">{account.email}</span>
+                <span className="approval-list__when">
+                  requested {new Date(account.requested_at).toLocaleDateString()}
+                </span>
+              </span>
+              <span className="approval-list__actions">
+                <button
+                  className="approval-button approval-button--approve"
+                  disabled={busyId === account.user_id}
+                  onClick={() => void decide(account.user_id, 'approve')}
+                >
+                  Approve
+                </button>
+                <button
+                  className="approval-button approval-button--reject"
+                  disabled={busyId === account.user_id}
+                  onClick={() => void decide(account.user_id, 'reject')}
+                >
+                  Reject
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   )

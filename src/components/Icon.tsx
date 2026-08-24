@@ -22,6 +22,7 @@ export type IconName =
   | 'trash'
   | 'log-out'
   | 'help'
+  | 'users'
 
 const PATHS: Record<IconName, ReactElement> = {
   'file-plus': (
@@ -128,6 +129,14 @@ const PATHS: Record<IconName, ReactElement> = {
       <circle cx="12" cy="12" r="9" />
       <path d="M9.1 9a2.9 2.9 0 1 1 4.4 2.5c-.9.55-1.5 1.1-1.5 2.1" />
       <path d="M12 17.5h.01" />
+    </>
+  ),
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 20a5.5 5.5 0 0 1 11 0" />
+      <path d="M15.5 6.2a3.2 3.2 0 0 1 0 6.2" />
+      <path d="M17 14.3a5.5 5.5 0 0 1 3.5 5.1" />
     </>
   ),
 }

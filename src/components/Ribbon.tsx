@@ -2,6 +2,7 @@ import { Icon, type IconName } from './Icon'
 import { useUiStore, type LeftTab } from '../store/uiStore'
 import { useAuthStore } from '../store/authStore'
 import { useVaultStore } from '../store/vaultStore'
+import { useApprovalStore } from '../store/approvalStore'
 
 const TABS: { tab: LeftTab; icon: IconName; label: string }[] = [
   { tab: 'files', icon: 'files', label: 'Files' },
@@ -23,6 +24,7 @@ export function Ribbon() {
   const toggleRight = useUiStore((s) => s.toggleRight)
   const create = useVaultStore((s) => s.create)
   const signOut = useAuthStore((s) => s.signOut)
+  const pendingCount = useApprovalStore((s) => s.pending.length)
 
   const graphOpen = rightOpen && rightTab === 'graph'
 
@@ -85,12 +87,13 @@ export function Ribbon() {
       </button>
 
       <button
-        className="icon-button"
-        title="Settings"
+        className="icon-button icon-button--badged"
+        title={pendingCount > 0 ? `Settings — ${pendingCount} sign-up${pendingCount === 1 ? '' : 's'} waiting` : 'Settings'}
         aria-label="Settings"
         onClick={() => setSettingsOpen(true)}
       >
         <Icon name="settings" />
+        {pendingCount > 0 && <span className="icon-button__badge">{pendingCount}</span>}
       </button>
 
       <button

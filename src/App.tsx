@@ -5,6 +5,7 @@ import { EditorPane } from './components/EditorPane'
 import { RightSidebar } from './components/RightSidebar'
 import { StatusBar } from './components/StatusBar'
 import { LoginGate } from './components/LoginGate'
+import { ApprovalGate } from './components/ApprovalGate'
 import { SettingsModal } from './components/SettingsModal'
 import { ChangelogModal } from './components/ChangelogModal'
 import { HelpModal } from './components/HelpModal'
@@ -38,7 +39,9 @@ export function App() {
 
   return (
     <LoginGate>
-      <Vault />
+      <ApprovalGate>
+        <Vault />
+      </ApprovalGate>
     </LoginGate>
   )
 }
