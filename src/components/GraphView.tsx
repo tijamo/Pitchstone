@@ -69,18 +69,22 @@ function fitLabel(
 }
 
 /**
- * The focused view: a spanning tree radiating outward from `rootId`, with no
- * cross-links between branches. Found by a plain BFS over the link graph —
- * the first edge to reach a node is the only one kept, so two branches that
- * both lead to the same note never draw a connecting edge between them.
+ * The focused view rooted at `rootId`. For a note (or an unresolved/ambiguous
+ * placeholder), it's a spanning tree radiating outward with no cross-links
+ * between branches — found by a plain BFS over the link graph, where the
+ * first edge to reach a node is the only one kept, so two branches that both
+ * lead to the same note never draw a connecting edge between them. Folder
+ * containment plays no part here: it groups notes by where they live, not by
+ * what they mean to each other, so it isn't a "branch" in this sense.
  *
- * Folder containment is excluded from a *note's* tree — it groups notes by
- * where they live, not by what they mean to each other, so it isn't a
- * "branch" in the sense this view is for. But when the root itself is a
- * folder, containment is the only thing it has to radiate out through: its
- * contents (recursively, so a sub-folder's notes count too) are gathered
- * first via containment, and each of those notes then seeds an ordinary
- * [[wikilink]] BFS of its own, exactly as if it had been focused directly.
+ * For a folder, it's a different shape on purpose: every node shown has to
+ * belong to that project, so containment (recursive, through sub-folders) is
+ * how its membership is found, and a [[wikilink]] only ever draws an edge
+ * between two notes already in that set — never followed out of it to
+ * whatever it happens to point at elsewhere in the vault. That can leave
+ * cross-links standing (two notes in the same project linking to a third),
+ * which is fine: unlike the note case, every node on screen is already
+ * guaranteed to belong here, so there is nothing for pruning to protect.
  */
 function buildFocusTree(
   nodes: GraphNode[],
@@ -89,10 +93,6 @@ function buildFocusTree(
 ): { nodes: GraphNode[]; links: GraphLink[] } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const idOf = (end: GraphNode | string) => (typeof end === 'string' ? end : end.id)
-
-  const visited = new Set([rootId])
-  const treeLinks: GraphLink[] = []
-  const seeds = [rootId]
 
   if (byId.get(rootId)?.folder) {
     // A containment edge points child -> its folder (see the note/folder
@@ -106,6 +106,8 @@ function buildFocusTree(
       if (!childrenOf.has(t)) childrenOf.set(t, [])
       childrenOf.get(t)!.push({ link, otherId: s })
     }
+    const visited = new Set([rootId])
+    const treeLinks: GraphLink[] = []
     const queue = [rootId]
     while (queue.length > 0) {
       const current = queue.shift()!
@@ -114,9 +116,19 @@ function buildFocusTree(
         visited.add(otherId)
         treeLinks.push(link)
         queue.push(otherId)
-        if (!byId.get(otherId)?.folder) seeds.push(otherId)
       }
     }
+    // Every [[wikilink]] with both ends already inside the project is real
+    // signal about how its notes relate; one that reaches outside it would
+    // pull in a node that doesn't belong to this project, so it's dropped
+    // rather than followed.
+    for (const link of links) {
+      if (link.structural) continue
+      const s = idOf(link.source as GraphNode | string)
+      const t = idOf(link.target as GraphNode | string)
+      if (visited.has(s) && visited.has(t)) treeLinks.push(link)
+    }
+    return { nodes: nodes.filter((n) => visited.has(n.id)), links: treeLinks }
   }
 
   const adjacency = new Map<string, { link: GraphLink; otherId: string }[]>()
@@ -130,7 +142,9 @@ function buildFocusTree(
     adjacency.get(t)!.push({ link, otherId: s })
   }
 
-  const queue = [...seeds]
+  const visited = new Set([rootId])
+  const treeLinks: GraphLink[] = []
+  const queue = [rootId]
   while (queue.length > 0) {
     const current = queue.shift()!
     for (const { link, otherId } of adjacency.get(current) ?? []) {
