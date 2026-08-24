@@ -84,6 +84,8 @@ type UiState = {
   /** null means "follow the OS preference". */
   theme: Theme | null
   settingsOpen: boolean
+  changelogOpen: boolean
+  helpOpen: boolean
   linkChoice: LinkChoice | null
   /** Graph shows a branching tree rooted at graphFocusId, not the whole vault. */
   graphFocus: boolean
@@ -103,6 +105,8 @@ type UiState = {
   setRightWidth: (width: number) => void
   setTheme: (theme: Theme | null) => void
   setSettingsOpen: (open: boolean) => void
+  setChangelogOpen: (open: boolean) => void
+  setHelpOpen: (open: boolean) => void
   setMobile: (mobile: boolean) => void
   closePanels: () => void
   setLinkChoice: (choice: LinkChoice) => void
@@ -134,6 +138,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   ),
   theme: storedTheme(),
   settingsOpen: false,
+  changelogOpen: false,
+  helpOpen: false,
   linkChoice: null,
   graphFocus: false,
   graphFocusId: null,
@@ -191,4 +197,6 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
 
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setChangelogOpen: (changelogOpen) => set({ changelogOpen }),
+  setHelpOpen: (helpOpen) => set({ helpOpen }),
 }))

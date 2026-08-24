@@ -1,4 +1,5 @@
 import { useVaultStore, type SaveStatus } from '../store/vaultStore'
+import { useUiStore } from '../store/uiStore'
 
 const SAVE_LABEL: Record<SaveStatus, string> = {
   idle: '',
@@ -34,6 +35,7 @@ export function StatusBar() {
   const notes = useVaultStore((s) => s.notes)
   const content = useVaultStore((s) => s.content)
   const activeId = useVaultStore((s) => s.activeId)
+  const setChangelogOpen = useUiStore((s) => s.setChangelogOpen)
 
   return (
     <footer className="statusbar">
@@ -46,9 +48,13 @@ export function StatusBar() {
           {countWords(content)} {countWords(content) === 1 ? 'word' : 'words'}
         </span>
       )}
-      <span className="statusbar__item statusbar__version" title="Pitchstone version">
+      <button
+        className="statusbar__item statusbar__version"
+        title="What's new"
+        onClick={() => setChangelogOpen(true)}
+      >
         v{__APP_VERSION__}
-      </span>
+      </button>
     </footer>
   )
 }

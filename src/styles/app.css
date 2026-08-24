@@ -280,7 +280,18 @@ button {
 }
 
 .statusbar__version {
+  font: inherit;
   font-family: var(--font-mono);
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.statusbar__version:hover {
+  color: var(--text-normal);
+  text-decoration: underline;
 }
 
 /* ---------- Login gate ---------- */
@@ -914,6 +925,28 @@ button {
   border-radius: 3px;
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+.changelog__entry {
+  gap: 8px;
+}
+
+.changelog__version {
+  margin: 0;
+  color: var(--text-normal);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.changelog__list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 /* Theme picker */

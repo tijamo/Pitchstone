@@ -11,6 +11,14 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.12',
+    title: 'What this version does, and how to write',
+    items: [
+      'Tap the version number — in the status bar, or Settings → About on a phone — to see what changed in every release, this one included.',
+      "A new help button in the ribbon opens a syntax reference: [[links]], #tags, formatting, and the frontmatter keys Pitchstone reads (tags: and parent:) — everything a note's own text can do that isn't otherwise discoverable by clicking around.",
+    ],
+  },
+  {
     ver: '0.11',
     title: 'Notes under notes',
     items: [

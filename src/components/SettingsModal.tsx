@@ -234,14 +234,24 @@ function Copyable({ value, label, mono }: { value: string; label: string; mono?:
 /**
  * The version is otherwise only in the status bar, which the mobile layout
  * hides — and "which version am I on" is exactly the question you have on the
- * phone that is misbehaving.
+ * phone that is misbehaving. Tapping it, here and there, opens the same
+ * release notes.
  */
 function About() {
+  const setChangelogOpen = useUiStore((s) => s.setChangelogOpen)
+
   return (
     <section className="modal__section">
       <h3 className="modal__heading">About</h3>
       <p className="modal__note modal__note--faint">
-        Pitchstone <span className="statusbar__version">v{__APP_VERSION__}</span>
+        Pitchstone{' '}
+        <button
+          className="statusbar__version"
+          title="What's new"
+          onClick={() => setChangelogOpen(true)}
+        >
+          v{__APP_VERSION__}
+        </button>
       </p>
     </section>
   )

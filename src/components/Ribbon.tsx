@@ -17,6 +17,7 @@ export function Ribbon() {
   const setLeftTab = useUiStore((s) => s.setLeftTab)
   const setRightTab = useUiStore((s) => s.setRightTab)
   const setSettingsOpen = useUiStore((s) => s.setSettingsOpen)
+  const setHelpOpen = useUiStore((s) => s.setHelpOpen)
   const mobile = useUiStore((s) => s.mobile)
   const toggleLeft = useUiStore((s) => s.toggleLeft)
   const toggleRight = useUiStore((s) => s.toggleRight)
@@ -73,6 +74,15 @@ export function Ribbon() {
       </button>
 
       <div className="ribbon__spacer" />
+
+      <button
+        className="icon-button"
+        title="Help"
+        aria-label="Help"
+        onClick={() => setHelpOpen(true)}
+      >
+        <Icon name="help" />
+      </button>
 
       <button
         className="icon-button"
