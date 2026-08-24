@@ -48,7 +48,12 @@ export default function Editor() {
         doc: '',
         extensions: [
           history(),
-          drawSelection(),
+          // Blinking off entirely rather than tuned to some rate: moving the
+          // cursor with the keyboard resets the blink cycle, and a fast
+          // typist or arrow-key navigator was catching it in its "off" phase
+          // far more than its "on" one — reading as the cursor vanishing
+          // rather than as a blink. A solid cursor has no phase to be caught in.
+          drawSelection({ cursorBlinkRate: 0 }),
           bracketMatching(),
           closeBrackets(),
           codeFolding(),
