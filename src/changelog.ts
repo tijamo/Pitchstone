@@ -11,6 +11,15 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.13',
+    title: 'Sign-ups now wait for approval',
+    items: [
+      'A new account no longer gets straight in. It waits until the owner approves it — approving unlocks Pitchstone and every other Tijamo app on the same account, since they all share one login.',
+      "The owner sees a red badge on the ribbon's Settings icon the moment a sign-up is waiting, plus a browser notification if permission is granted, and approves or rejects it from a new User management section in Settings.",
+      'Everyone who already had an account keeps working exactly as before — only sign-ups from this release onward join the queue.',
+    ],
+  },
+  {
     ver: '0.12',
     title: 'What this version does, and how to write',
     items: [
