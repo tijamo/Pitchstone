@@ -236,6 +236,10 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   } | null>(null)
   const hoveredIdRef = useRef<string | null>(null)
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The hovered node's direct neighbors — everything else gets dimmed on
+  // draw, since a dense graph's edges are otherwise indistinguishable from
+  // one another once more than a handful cross the same area.
+  const hoverNeighborsRef = useRef<Set<string>>(new Set())
 
   const noteIds = notes
     .map((n) => n.id)
@@ -292,6 +296,12 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       const ambiguousColor = styles.getPropertyValue('--link-ambiguous').trim()
 
       const structuralColor = styles.getPropertyValue('--border').trim()
+      // While a node is hovered, everything not directly touching it fades:
+      // a graph of any real size has edges crossing all over the canvas, and
+      // without this there is no way to tell which lines belong to which
+      // node once more than a few are on screen at once.
+      const hoverId = hoveredIdRef.current
+      const neighbors = hoverNeighborsRef.current
       ctx!.lineWidth = 1
       for (const link of linksRef.current) {
         const s = link.source as GraphNode
@@ -299,6 +309,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         if (s.x == null || t.x == null || s.y == null || t.y == null) continue
         const p1 = project(s.x, s.y)
         const p2 = project(t.x, t.y)
+        ctx!.globalAlpha = hoverId != null && s.id !== hoverId && t.id !== hoverId ? 0.15 : 1
         ctx!.strokeStyle = link.structural ? structuralColor : lineColor
         ctx!.setLineDash(link.structural ? [3, 3] : [])
         ctx!.beginPath()
@@ -307,6 +318,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         ctx!.stroke()
       }
       ctx!.setLineDash([])
+      ctx!.globalAlpha = 1
 
       ctx!.font = FONT
       ctx!.textBaseline = 'middle'
@@ -318,6 +330,8 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         const p = project(node.x, node.y)
         const r = radiusOf(node)
         const isActive = node.id === activeIdRef.current
+        ctx!.globalAlpha =
+          hoverId != null && node.id !== hoverId && !neighbors.has(node.id) ? 0.25 : 1
 
         ctx!.beginPath()
         if (node.folder) {
@@ -352,6 +366,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
               : labelColor
         ctx!.fillText(fitLabel(ctx!, node.title, maxLabel, labelCache), p.x + r + 4, p.y)
       }
+      ctx!.globalAlpha = 1
     }
 
     function resize() {
@@ -390,7 +405,11 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       const { width, height } = sizeRef.current
       simRef.current?.stop()
       simRef.current = forceSimulation(simNodes)
-        .force('charge', forceManyBody().strength(-140))
+        // Repulsion grows with node count so a bigger vault settles at the
+        // same visual density as a small one — a flat strength just lets
+        // more nodes crowd the same canvas, which is what was reading as
+        // edges piling on top of each other as the graph grew.
+        .force('charge', forceManyBody().strength(-100 - Math.min(400, simNodes.length * 3)))
         .force(
           'link',
           forceLink<GraphNode, GraphLink>(simLinks)
@@ -544,7 +563,9 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       }
       if (hoveredIdRef.current !== null) {
         hoveredIdRef.current = null
+        hoverNeighborsRef.current = new Set()
         setTooltip(null)
+        draw()
       }
     }
 
@@ -587,6 +608,17 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         if (node?.id !== hoveredIdRef.current) {
           clearHover()
           hoveredIdRef.current = node?.id ?? null
+          if (node) {
+            const neighbors = new Set<string>()
+            for (const link of linksRef.current) {
+              const s = link.source as GraphNode
+              const t = link.target as GraphNode
+              if (s.id === node.id) neighbors.add(t.id)
+              else if (t.id === node.id) neighbors.add(s.id)
+            }
+            hoverNeighborsRef.current = neighbors
+            draw()
+          }
           // A folder or a real note both have a path worth showing; an
           // unresolved/ambiguous placeholder doesn't exist yet and has none.
           if (node?.path != null) {
