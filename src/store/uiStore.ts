@@ -116,8 +116,8 @@ type UiState = {
   focusGraph: (id: string) => void
 }
 
-// Both sidebars start open on a desktop and closed on a phone, where they are
-// drawers over the editor rather than columns beside it.
+// The file tree starts open on a desktop and closed on a phone, where it's a
+// drawer over the editor rather than a column beside it.
 const startMobile = isMobileWidth()
 const startLeftOpen = !startMobile
 const startLeftWidth = storedWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT_WIDTH)
@@ -129,7 +129,14 @@ export const useUiStore = create<UiState>((set, get) => ({
   // rather than one note's neighbours, and backlinks are one click away.
   rightTab: 'graph',
   leftOpen: startLeftOpen,
-  rightOpen: !startMobile,
+  // Unlike the file tree, the graph starts open on a phone too — this is
+  // only the module's *initial* value, so it only ever takes effect on an
+  // actual fresh load (a real cold launch, or a manual refresh, which a web
+  // app cannot tell apart from one). The OS backgrounding and resuming an
+  // already-running PWA never re-runs this module, so whatever the drawer
+  // was showing then is left alone; setMobile's own resize-driven reset
+  // (crossing the breakpoint mid-session) is unaffected too.
+  rightOpen: true,
   leftWidth: startLeftWidth,
   rightWidth: storedWidth(
     RIGHT_WIDTH_KEY,
