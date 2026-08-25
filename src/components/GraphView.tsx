@@ -225,6 +225,10 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   // hold-to-drag, or a slide-into-pan — see handlePointerDown/Move/Up.
   const pendingTouchRef = useRef<{ node: GraphNode; startX: number; startY: number } | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Every touch currently down, by pointer id — a second one landing turns
+  // whatever single-touch gesture was in flight into a pinch instead.
+  const activeTouchesRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const pinchRef = useRef<{ distance: number; midX: number; midY: number } | null>(null)
   const simRef = useRef<Simulation<GraphNode, GraphLink> | null>(null)
   // Re-applies the current focus filter to the already-fetched graph and
   // restarts the simulation, without a network round trip — set once the
@@ -602,11 +606,49 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       }
     }
 
+    // The distance and midpoint between the first two active touches, for
+    // pinch-to-zoom — null once fewer than two fingers are down.
+    function pinchAnchor(): { distance: number; midX: number; midY: number } | null {
+      if (activeTouchesRef.current.size < 2) return null
+      const pts = [...activeTouchesRef.current.values()].slice(0, 2)
+      return {
+        distance: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1,
+        midX: (pts[0].x + pts[1].x) / 2,
+        midY: (pts[0].y + pts[1].y) / 2,
+      }
+    }
+
     function handlePointerDown(e: PointerEvent) {
       canvas!.setPointerCapture(e.pointerId)
       const rect = canvas!.getBoundingClientRect()
       const sx = e.clientX - rect.left
       const sy = e.clientY - rect.top
+
+      if (e.pointerType === 'touch') {
+        activeTouchesRef.current.set(e.pointerId, { x: sx, y: sy })
+        const anchor = pinchAnchor()
+        if (anchor) {
+          // A second finger landing means this is a pinch, not a tap, a
+          // hold-to-drag, or a one-finger pan — abandon whatever single-touch
+          // gesture was already in flight and start the pinch from here.
+          if (longPressTimerRef.current != null) {
+            clearTimeout(longPressTimerRef.current)
+            longPressTimerRef.current = null
+          }
+          if (dragRef.current) {
+            dragRef.current.node.fx = null
+            dragRef.current.node.fy = null
+            simRef.current?.alphaTarget(0)
+            dragRef.current = null
+          }
+          pendingTouchRef.current = null
+          panRef.current = null
+          clearHover()
+          pinchRef.current = anchor
+          return
+        }
+      }
+
       const node = nodeAt(sx, sy)
       if (node && e.pointerType === 'touch') {
         // Touch is fiddlier than a mouse click: a finger's contact point
@@ -642,6 +684,26 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       const rect = canvas!.getBoundingClientRect()
       const sx = e.clientX - rect.left
       const sy = e.clientY - rect.top
+
+      if (e.pointerType === 'touch' && activeTouchesRef.current.has(e.pointerId)) {
+        activeTouchesRef.current.set(e.pointerId, { x: sx, y: sy })
+      }
+
+      if (pinchRef.current) {
+        const anchor = pinchAnchor()
+        if (!anchor) return // a finger left mid-pinch; handlePointerUp resolves it
+        const prev = pinchRef.current
+        const t = transformRef.current
+        const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, t.k * (anchor.distance / prev.distance)))
+        // Anchor on the midpoint's *previous* world position so the same
+        // spot on the graph stays under the fingers as they spread, move, or
+        // both at once — the same trick handleWheel uses for the cursor.
+        const world = toWorld(prev.midX, prev.midY)
+        transformRef.current = { k, x: anchor.midX - world.x * k, y: anchor.midY - world.y * k }
+        pinchRef.current = anchor
+        draw()
+        return
+      }
 
       if (dragRef.current) {
         clearHover()
@@ -708,6 +770,19 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     }
 
     function handlePointerUp(e: PointerEvent) {
+      if (e.pointerType === 'touch') {
+        activeTouchesRef.current.delete(e.pointerId)
+        if (pinchRef.current) {
+          // Still two or more fingers down: reseed the anchor from whichever
+          // remain instead of ending the gesture. Down to one or none: the
+          // pinch is over — don't resume a single-touch tap/drag/pan for a
+          // finger that's still down, since lifting out of a pinch shouldn't
+          // suddenly start moving a node.
+          pinchRef.current = pinchAnchor()
+          return
+        }
+      }
+
       // A touch released before the hold fired, and never slid far enough to
       // become a pan either — that's a tap, so open the note it landed on.
       if (pendingTouchRef.current) {
@@ -736,7 +811,9 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     // system edge-swipe stealing it) without ever firing pointerup — leaving
     // the pending/dragged state behind would pin a node in place forever, or
     // leave a stale hold timer waiting to fire on a finger that's long gone.
-    function handlePointerCancel() {
+    function handlePointerCancel(e: PointerEvent) {
+      if (e.pointerType === 'touch') activeTouchesRef.current.delete(e.pointerId)
+      pinchRef.current = pinchAnchor()
       if (longPressTimerRef.current != null) {
         clearTimeout(longPressTimerRef.current)
         longPressTimerRef.current = null
