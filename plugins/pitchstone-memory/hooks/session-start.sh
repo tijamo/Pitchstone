@@ -21,9 +21,10 @@ Your memory for this and every project is the Pitchstone vault, through the
   is what is true now — stack, deploy targets, what is done, what is
   mid-flight, what is blocked — and it is kept current by rewriting it in
   place, not by appending.
-- \`Memory/Projects/${project}/decisions.md\` and \`gotchas.md\` sit beside it,
-  append-only and dated. They are history: read them when a question calls for
-  one, and where they contradict \`state.md\`, \`state.md\` is right.
+- Decisions are one note per decision — \`Memory/Projects/${project}/dcsn-YYYY-MM-DD-<slug>.md\`,
+  tagged \`decision\` — not a shared log; \`gotchas.md\` beside them is still one
+  append-only file. Both are history: read them when a question calls for one,
+  and where they contradict \`state.md\`, \`state.md\` is right.
 - Something that carries across projects goes in \`Memory/Patterns/<topic>.md\`,
   named for the topic rather than the day.
 - Open with \`vault_info\` and a \`search_notes\` for the task — the vault very

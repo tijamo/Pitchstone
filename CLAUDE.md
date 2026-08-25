@@ -143,16 +143,15 @@ top level and the file tree doesn't fill up with machine minutes:
 
 ```
 Memory/
-  Projects/<Project>/state.md       ← current truth, rewritten in place
-                    /decisions.md   ← append-only, dated
-                    /gotchas.md     ← things that bit us
-  Patterns/<topic>.md               ← what carries across projects
+  Projects/<Project>/state.md              ← current truth, rewritten in place
+                    /dcsn-YYYY-MM-DD-<slug>.md  ← one note per decision
+                    /gotchas.md             ← things that bit us
+  Patterns/<topic>.md                      ← what carries across projects
 ```
 
 A dated, cross-project session log (`Memory/Sessions/*`) was tried and retired
 on 2026-08-24 — it pulled against the point of `state.md` being the one thing
-a cold session reads, by giving a project fact a second place to live. See
-`Memory/Projects/Pitchstone/decisions.md` in the vault for the full reasoning.
+a cold session reads, by giving a project fact a second place to live.
 
 **`state.md` is the one that earns its keep** — stack, deploy targets, what is
 done, what is mid-flight, what is blocked — and it is the read path that
@@ -161,25 +160,46 @@ project" out of a hundred dated notes is slow and lossy; one note kept current
 is not. So a cold session reads `state.md` and is oriented, and everything else
 is reference.
 
+**Decisions are one note per decision, not a shared log.** Changed 2026-08-25,
+by Tim's direct order — retiring the single per-project `decisions.md` this
+same section used to describe, in favour of
+`Memory/Projects/<Project>/dcsn-YYYY-MM-DD-<slug>.md`, one per decision, tagged
+`decision`. The single-file shape was already the second attempt at this (it
+replaced a dated cross-project log on 2026-08-21, for the same "everything
+about this project" read-path reason `state.md` exists), and it had its own
+cost: nothing inside a growing shared log is individually linkable, and
+`write_note` has no partial-append, so recording one decision meant reading
+and rewriting every decision that came before it. See
+`Memory/Projects/Pitchstone/dcsn-2026-08-25-decisions-become-individual-notes.md`
+in the vault for the full record — including that it's a direct order, not an
+inferred preference.
+
 **Logs record that a decision happened; `state.md` records what is true now.**
-That is the rule that stops an append-only log from lying: a decision from
-three weeks ago says "we're using X" long after X was ripped out. Where a log
-and `state.md` disagree, `state.md` is right and the log is history.
+That is the rule that stops old history from lying: a decision from three
+weeks ago says "we're using X" long after X was ripped out. Where a decision
+note and `state.md` disagree, `state.md` is right and the note is history.
 
 Conventions that keep it usable:
 
-- **Rewrite `state.md`; append everything else** — `write_note` with
-  `mode: "append"` for `decisions.md` and `gotchas.md`. Rewriting one of
-  those loses what's already in it.
+- **Rewrite `state.md`; append `gotchas.md`; write a decision note once.**
+  `write_note` with `mode: "append"` for `gotchas.md` only. Decision notes are
+  written once and not appended to — a later reversal gets its own new dated
+  note rather than editing the old one, the same way `state.md`'s history
+  isn't edited when a fact changes, only superseded.
 - **Tag every memory note `#memory`**, plus a project tag (`#pitchstone`,
-  `#dodo`). `list_tags` is how a cold session finds what's already there.
+  `#dodo`), and every decision note additionally `#decision`.
+  `list_tags`/tag-filtered `list_notes` is how a cold session finds what's
+  already there — including, now, every decision across every project in one
+  query.
 - **Search before writing.** `search_notes` first: the vault very often already
-  knows, and a second note saying the same thing is worse than none.
+  knows, and a second note saying the same thing is worse than none. This
+  still applies to `state.md` and `gotchas.md`; a decision note is written
+  once by design, so there's nothing to find-and-update there.
 - **Refer to memory notes by full path, never a bare title.** `read_note` and
   `[[wikilinks]]` resolve a title regardless of folder, and every project now
   has a note titled "state" — so `[[state]]` is ambiguous and
   `read_note("state")` is a coin toss. A bare project name is worse than
-  ambiguous: since project memory split into `state.md`/`decisions.md`/
+  ambiguous: since project memory split into `state.md`/`dcsn-*.md`/
   `gotchas.md`, no note is titled just "Pitchstone" or "Dodo" — that folder
   isn't a note — so `[[Pitchstone]]` resolves to nothing and the link goes
   dead silently. Link to the specific note instead, e.g.
@@ -191,9 +211,9 @@ Conventions that keep it usable:
 
 Open with `vault_info`, read `Memory/Projects/Pitchstone/state.md` before
 building anything, and `search_notes` for the task in hand. Close by updating
-`state.md` if what's true has changed, and appending the decision or the gotcha
-if there was one. Something learned the hard way is worth writing down the
-moment it's learned, not at the end.
+`state.md` if what's true has changed, and writing a new decision note or
+appending to `gotchas.md` if there was one. Something learned the hard way is
+worth writing down the moment it's learned, not at the end.
 
 On a machine with the `pitchstone-memory` plugin installed (see below) a
 `SessionStart` hook says all this at the top of every session, with this
