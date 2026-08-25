@@ -42,6 +42,12 @@ const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
 /** How long the pointer has to sit still on a node before its path shows. */
 const HOVER_DELAY = 500
+/** How long a touch has to hold still on a node before it starts dragging it
+ * — below this, lifting the finger is a tap that opens the note instead. */
+const TOUCH_LONG_PRESS_MS = 450
+/** How far a touch can slide before the hold fires before it's read as a pan
+ * rather than an attempt to tap or hold the node underneath it. */
+const TOUCH_MOVE_CANCEL_PX = 10
 
 /**
  * Node labels are clipped to a share of the panel rather than drawn at full
@@ -215,6 +221,10 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   const transformRef = useRef({ x: 0, y: 0, k: 1 })
   const dragRef = useRef<{ node: GraphNode; moved: boolean } | null>(null)
   const panRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null)
+  // A touch that landed on a node but hasn't yet been classified as a tap, a
+  // hold-to-drag, or a slide-into-pan — see handlePointerDown/Move/Up.
+  const pendingTouchRef = useRef<{ node: GraphNode; startX: number; startY: number } | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const simRef = useRef<Simulation<GraphNode, GraphLink> | null>(null)
   // Re-applies the current focus filter to the already-fetched graph and
   // restarts the simulation, without a network round trip — set once the
@@ -569,13 +579,55 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       }
     }
 
+    // A node opens or moves depending on how the pointer that landed on it
+    // released — shared by the mouse click path and the touch tap path below.
+    function openNode(node: GraphNode, at: { clientX: number; clientY: number }) {
+      // A folder pseudo-node names a place, not a note — nothing to open.
+      // Opening a placeholder writes the note it stands for, which is what
+      // following the wikilink itself would have done.
+      if (node.folder) {
+        // no-op
+      } else if (node.ambiguous) {
+        const matches = matchNotesByTarget(notes, node.title)
+        useUiStore.getState().setLinkChoice({
+          x: at.clientX,
+          y: at.clientY,
+          target: node.title,
+          matches,
+        })
+      } else if (node.unresolved) {
+        void openOrCreate(node.title)
+      } else {
+        void open(node.id)
+      }
+    }
+
     function handlePointerDown(e: PointerEvent) {
       canvas!.setPointerCapture(e.pointerId)
       const rect = canvas!.getBoundingClientRect()
       const sx = e.clientX - rect.left
       const sy = e.clientY - rect.top
       const node = nodeAt(sx, sy)
-      if (node) {
+      if (node && e.pointerType === 'touch') {
+        // Touch is fiddlier than a mouse click: a finger's contact point
+        // drifts a few pixels even on a still tap, so grabbing the node the
+        // instant it's touched (the mouse behavior below) turned almost
+        // every attempt to open a note into an accidental drag instead. A
+        // touch that lands on a node now waits: it resolves to a tap (open),
+        // a pan (moved before the hold fired), or a drag (held still long
+        // enough) in handlePointerMove/Up.
+        pendingTouchRef.current = { node, startX: sx, startY: sy }
+        longPressTimerRef.current = setTimeout(() => {
+          const pending = pendingTouchRef.current
+          pendingTouchRef.current = null
+          longPressTimerRef.current = null
+          if (!pending) return
+          pending.node.fx = pending.node.x
+          pending.node.fy = pending.node.y
+          dragRef.current = { node: pending.node, moved: false }
+          simRef.current?.alphaTarget(0.3).restart()
+        }, TOUCH_LONG_PRESS_MS)
+      } else if (node) {
         node.fx = node.x
         node.fy = node.y
         dragRef.current = { node, moved: false }
@@ -603,6 +655,21 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         const p = panRef.current
         transformRef.current = { ...transformRef.current, x: p.tx + (sx - p.x), y: p.ty + (sy - p.y) }
         draw()
+      } else if (pendingTouchRef.current) {
+        const pending = pendingTouchRef.current
+        const dist = Math.hypot(sx - pending.startX, sy - pending.startY)
+        if (dist > TOUCH_MOVE_CANCEL_PX) {
+          // Slid before the hold fired — read that as an attempt to pan the
+          // canvas, not a hold-to-drag, so a finger that isn't perfectly
+          // still while tapping doesn't yank the node out from under it.
+          if (longPressTimerRef.current != null) {
+            clearTimeout(longPressTimerRef.current)
+            longPressTimerRef.current = null
+          }
+          pendingTouchRef.current = null
+          const t = transformRef.current
+          panRef.current = { x: sx, y: sy, tx: t.x, ty: t.y }
+        }
       } else {
         const node = nodeAt(sx, sy)
         if (node?.id !== hoveredIdRef.current) {
@@ -641,31 +708,44 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     }
 
     function handlePointerUp(e: PointerEvent) {
+      // A touch released before the hold fired, and never slid far enough to
+      // become a pan either — that's a tap, so open the note it landed on.
+      if (pendingTouchRef.current) {
+        if (longPressTimerRef.current != null) {
+          clearTimeout(longPressTimerRef.current)
+          longPressTimerRef.current = null
+        }
+        const node = pendingTouchRef.current.node
+        pendingTouchRef.current = null
+        openNode(node, e)
+        return
+      }
+
       const drag = dragRef.current
       if (drag) {
         drag.node.fx = null
         drag.node.fy = null
         simRef.current?.alphaTarget(0)
-        if (!drag.moved) {
-          // A folder pseudo-node names a place, not a note — nothing to open.
-          // Clicking a placeholder writes the note it stands for, which is
-          // what following the wikilink itself would have done.
-          if (drag.node.folder) {
-            // no-op
-          } else if (drag.node.ambiguous) {
-            const matches = matchNotesByTarget(notes, drag.node.title)
-            useUiStore.getState().setLinkChoice({
-              x: e.clientX,
-              y: e.clientY,
-              target: drag.node.title,
-              matches,
-            })
-          } else if (drag.node.unresolved) {
-            void openOrCreate(drag.node.title)
-          } else {
-            void open(drag.node.id)
-          }
-        }
+        if (!drag.moved) openNode(drag.node, e)
+        dragRef.current = null
+      }
+      panRef.current = null
+    }
+
+    // A touch's contact can be cancelled by the OS mid-gesture (e.g. a
+    // system edge-swipe stealing it) without ever firing pointerup — leaving
+    // the pending/dragged state behind would pin a node in place forever, or
+    // leave a stale hold timer waiting to fire on a finger that's long gone.
+    function handlePointerCancel() {
+      if (longPressTimerRef.current != null) {
+        clearTimeout(longPressTimerRef.current)
+        longPressTimerRef.current = null
+      }
+      pendingTouchRef.current = null
+      if (dragRef.current) {
+        dragRef.current.node.fx = null
+        dragRef.current.node.fy = null
+        simRef.current?.alphaTarget(0)
         dragRef.current = null
       }
       panRef.current = null
@@ -706,6 +786,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     canvas.addEventListener('pointerdown', handlePointerDown)
     canvas.addEventListener('pointermove', handlePointerMove)
     canvas.addEventListener('pointerup', handlePointerUp)
+    canvas.addEventListener('pointercancel', handlePointerCancel)
     canvas.addEventListener('pointerleave', clearHover)
     canvas.addEventListener('dblclick', handleDoubleClick)
     canvas.addEventListener('wheel', handleWheel, { passive: false })
@@ -715,9 +796,11 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       resizeObserver.disconnect()
       simRef.current?.stop()
       clearHover()
+      if (longPressTimerRef.current != null) clearTimeout(longPressTimerRef.current)
       canvas.removeEventListener('pointerdown', handlePointerDown)
       canvas.removeEventListener('pointermove', handlePointerMove)
       canvas.removeEventListener('pointerup', handlePointerUp)
+      canvas.removeEventListener('pointercancel', handlePointerCancel)
       canvas.removeEventListener('pointerleave', clearHover)
       canvas.removeEventListener('dblclick', handleDoubleClick)
       canvas.removeEventListener('wheel', handleWheel)
