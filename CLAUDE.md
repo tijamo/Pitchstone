@@ -322,6 +322,15 @@ can read and write the same vault.
   and leaves tags/frontmatter/links for the next load's backfill to derive —
   see "Derived data is rebuildable" above. JSZip is dynamic-`import()`-ed from
   the Settings modal, so it never reaches the main bundle unused.
+- **An import is planned before it's written, and it's always undoable.**
+  `planImportFromZip` reads the whole zip and computes the exact notes it
+  would create — including how many collided with an existing name and were
+  renamed rather than overwritten — without touching the database; the
+  Settings modal shows that plan and only calls `vaultStore.commitImport` on
+  confirmation. `commitImport` records every id `createNotes` returns as
+  `lastImport`, and `undoLastImport` deletes exactly that set — not a
+  snapshot restore, since nothing was ever overwritten to restore *to*. A
+  second import replaces the undo record rather than merging with it.
 - **A folder can be a note, by the same convention Obsidian's "Folder Notes"
   plugin uses.** `paths.ts`'s `folderNotePath(folder)` names the note at
   `<folder>/<folder-name>.md`; `buildTree` recognizes one and attaches it to

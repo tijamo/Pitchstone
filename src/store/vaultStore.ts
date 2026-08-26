@@ -2,7 +2,9 @@ import { create } from 'zustand'
 import {
   backfillIndex,
   createNote,
+  createNotes,
   deleteNote,
+  deleteNotes,
   describeError,
   fetchNote,
   listNotes,
@@ -10,6 +12,7 @@ import {
   saveContent,
   type NoteMeta,
 } from '../lib/notes'
+import type { TransferNote } from '../lib/vaultTransfer'
 import { dirname, joinPath, sanitizeSegment, toPath, uniquePath } from '../lib/paths'
 
 /**
@@ -89,6 +92,14 @@ type VaultState = {
    * is typing rather than to whichever write lands second.
    */
   openNoteStale: 'changed' | 'deleted' | null
+  /**
+   * The most recent import, if it hasn't been undone yet: exactly the ids it
+   * created, so undoing removes precisely those notes and nothing else — not
+   * a snapshot to restore to, since edits made since would be lost either
+   * way. Cleared by undoing, by a newer import replacing it, and by reset
+   * (a new sign-in has no business seeing another account's undo button).
+   */
+  lastImport: { noteIds: string[]; count: number } | null
 
   load: () => Promise<void>
   open: (id: string) => Promise<void>
@@ -105,6 +116,8 @@ type VaultState = {
   reloadOpenNote: () => Promise<void>
   keepLocalEdits: () => void
   closeOpenNote: () => void
+  commitImport: (rows: TransferNote[]) => Promise<number>
+  undoLastImport: () => Promise<void>
 }
 
 export const useVaultStore = create<VaultState>((set, get) => ({
@@ -118,6 +131,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   linksVersion: 0,
   contentVersion: 0,
   openNoteStale: null,
+  lastImport: null,
 
   load: async () => {
     set({ loading: true, error: null })
@@ -428,10 +442,35 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       error: null,
       renamingId: null,
       openNoteStale: null,
+      lastImport: null,
       // Bumped, not zeroed: the graph must drop one person's links on its way
       // to another's, and a counter that went backwards could land on a value
       // it had already seen.
       linksVersion: state.linksVersion + 1,
     }))
+  },
+
+  /**
+   * Writes the notes an import planned, and remembers exactly which ids it
+   * created so undoLastImport can remove precisely those and nothing else.
+   * A later import overwrites this rather than merging with it — undo only
+   * ever means "the one just done."
+   */
+  commitImport: async (rows) => {
+    const noteIds = await createNotes(rows)
+    set({ lastImport: { noteIds, count: noteIds.length } })
+    await get().load()
+    return noteIds.length
+  },
+
+  /** Removes exactly the notes the last import created. Does not restore
+   * anything it may have overwritten, because it never overwrote anything —
+   * a colliding name was renamed, not replaced, at import time. */
+  undoLastImport: async () => {
+    const pending = get().lastImport
+    if (!pending) return
+    await deleteNotes(pending.noteIds)
+    set({ lastImport: null })
+    await get().load()
   },
 }))

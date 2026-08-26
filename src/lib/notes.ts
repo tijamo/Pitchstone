@@ -83,19 +83,45 @@ export async function fetchAllNotes(): Promise<Note[]> {
   return (data ?? []).map((row) => toNote(row as RawMeta & { content: string }))
 }
 
-/** Batch insert for an import: chunked so a large vault doesn't go over in
- * one request, tags/frontmatter/links left for the next load's backfill to
- * derive rather than computed here — see "Derived data is rebuildable". */
-export async function createNotes(rows: { path: string; content: string }[]): Promise<void> {
+/**
+ * Batch insert for an import: chunked so a large vault doesn't go over in one
+ * request, tags/frontmatter/links left for the next load's backfill to derive
+ * rather than computed here — see "Derived data is rebuildable". Returns the
+ * id of every note actually created, in no particular order, so an import can
+ * be undone by deleting exactly this set and nothing else.
+ */
+export async function createNotes(rows: { path: string; content: string }[]): Promise<string[]> {
   const CHUNK_SIZE = 200
+  const ids: string[] = []
   for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-    const { error } = await db()
+    const { data, error } = await db()
       .from('pitchstone_notes')
       .insert(rows.slice(i, i + CHUNK_SIZE))
+      .select('id')
     if (error) throw error
+    ids.push(...(data ?? []).map((row) => row.id as string))
   }
   // A batch of new notes can resolve links that were dangling, same as a
   // single create — see resolveLinks's own note on when to call it.
+  await resolveLinks()
+  return ids
+}
+
+/**
+ * The reverse of createNotes, for undoing an import: delete exactly this set
+ * of ids and nothing else. Chunked the same way, and resolved once at the end
+ * rather than per note — deleting a batch can unresolve links pointing at any
+ * of them, same as a single delete.
+ */
+export async function deleteNotes(ids: string[]): Promise<void> {
+  const CHUNK_SIZE = 200
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    const { error } = await db()
+      .from('pitchstone_notes')
+      .delete()
+      .in('id', ids.slice(i, i + CHUNK_SIZE))
+    if (error) throw error
+  }
   await resolveLinks()
 }
 

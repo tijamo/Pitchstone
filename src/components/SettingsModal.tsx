@@ -3,7 +3,8 @@ import { Icon } from './Icon'
 import { useUiStore, type Theme } from '../store/uiStore'
 import { useApprovalStore } from '../store/approvalStore'
 import { useVaultStore } from '../store/vaultStore'
-import { createNotes, describeError, fetchAllNotes } from '../lib/notes'
+import { describeError, fetchAllNotes } from '../lib/notes'
+import type { TransferNote } from '../lib/vaultTransfer'
 import { createToken, listTokens, revokeToken, type ApiToken } from '../lib/tokens'
 
 /**
@@ -99,20 +100,33 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url)
 }
 
+/** What a chosen zip would do, computed before anything is written — see
+ * planImportFromZip. Held here rather than in the store: it's only ever
+ * relevant while this dialog is open, unlike lastImport (the undo record). */
+type PendingImport = { fileName: string; notes: TransferNote[]; renamed: number }
+
 /**
  * A vault is already just a folder of `.md` files with frontmatter and
  * `[[wikilinks]]` — the same shape Obsidian itself uses — so moving one in or
  * out is a zip, not a bespoke format. Both directions dynamic-`import()` the
  * zip logic (see vaultTransfer.ts) so JSZip never lands in the main bundle for
  * someone who never touches this section.
+ *
+ * Import never overwrites: a colliding name is renamed, not replaced — see
+ * vaultTransfer's uniquePath — so the only real risk is importing the wrong
+ * file at all. Reading the plan back before committing, and being able to
+ * undo after, are what actually cover that.
  */
 function ImportExport() {
   const notes = useVaultStore((s) => s.notes)
-  const load = useVaultStore((s) => s.load)
+  const lastImport = useVaultStore((s) => s.lastImport)
+  const commitImport = useVaultStore((s) => s.commitImport)
+  const undoLastImport = useVaultStore((s) => s.undoLastImport)
   const fileInput = useRef<HTMLInputElement>(null)
-  const [busy, setBusy] = useState<'export' | 'import' | null>(null)
+  const [busy, setBusy] = useState<'export' | 'plan' | 'import' | 'undo' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
+  const [pending, setPending] = useState<PendingImport | null>(null)
 
   const runExport = async () => {
     setBusy('export')
@@ -130,20 +144,47 @@ function ImportExport() {
     }
   }
 
-  const runImport = async (file: File) => {
-    setBusy('import')
+  const planImport = async (file: File) => {
+    setBusy('plan')
     setError(null)
     setResult(null)
+    setPending(null)
     try {
-      const { importVault } = await import('../lib/vaultTransfer')
-      const rows = await importVault(file, new Set(notes.map((n) => n.path)))
-      if (rows.length === 0) {
+      const { planImportFromZip } = await import('../lib/vaultTransfer')
+      const plan = await planImportFromZip(file, new Set(notes.map((n) => n.path)))
+      if (plan.notes.length === 0) {
         setError("No markdown notes found in that file — Pitchstone can't carry over attachments.")
         return
       }
-      await createNotes(rows)
-      await load()
-      setResult(`Imported ${rows.length} note${rows.length === 1 ? '' : 's'}.`)
+      setPending({ fileName: file.name, notes: plan.notes, renamed: plan.renamed })
+    } catch (e) {
+      setError(describeError(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const confirmImport = async () => {
+    if (!pending) return
+    setBusy('import')
+    setError(null)
+    try {
+      const count = await commitImport(pending.notes)
+      setResult(`Imported ${count} note${count === 1 ? '' : 's'} from ${pending.fileName}.`)
+      setPending(null)
+    } catch (e) {
+      setError(describeError(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const runUndo = async () => {
+    setBusy('undo')
+    setError(null)
+    try {
+      await undoLastImport()
+      setResult('Import undone — the notes it added are gone.')
     } catch (e) {
       setError(describeError(e))
     } finally {
@@ -158,40 +199,83 @@ function ImportExport() {
       </h3>
       <p className="modal__note">
         Export writes every note to a <code>.zip</code> of <code>.md</code> files, laid out the
-        way an Obsidian vault folder is. Import reads one of those back in, adding a note for
-        each file alongside what's already here — a name already in use is kept, not
-        overwritten. Neither carries attachments or Obsidian's own settings; Pitchstone has
-        nowhere to put them.
+        way an Obsidian vault folder is. Import reads one of those back in and shows you what it
+        would do before touching anything — it only ever adds notes; a name already in use is
+        renamed, never overwritten, and the whole import can be undone afterward. Neither
+        direction carries attachments or Obsidian's own settings; Pitchstone has nowhere to put
+        them.
       </p>
 
       {error && <p className="gate__error">{error}</p>}
       {result && !error && <p className="modal__note modal__note--faint">{result}</p>}
 
-      <div className="transfer-row">
-        <button className="gate__ghost transfer-row__button" disabled={busy !== null} onClick={() => void runExport()}>
-          <Icon name="download" size={14} />
-          {busy === 'export' ? 'Exporting…' : 'Export vault'}
-        </button>
-        <button
-          className="gate__ghost transfer-row__button"
-          disabled={busy !== null}
-          onClick={() => fileInput.current?.click()}
-        >
-          <Icon name="upload" size={14} />
-          {busy === 'import' ? 'Importing…' : 'Import vault'}
-        </button>
-        <input
-          ref={fileInput}
-          type="file"
-          accept=".zip"
-          hidden
-          onChange={(event) => {
-            const file = event.target.files?.[0]
-            event.target.value = ''
-            if (file) void runImport(file)
-          }}
-        />
-      </div>
+      {pending ? (
+        <div className="transfer-preview">
+          <p className="modal__note">
+            <strong>{pending.fileName}</strong> adds <strong>{pending.notes.length}</strong> note
+            {pending.notes.length === 1 ? '' : 's'} to this vault.
+            {pending.renamed > 0 && (
+              <>
+                {' '}
+                {pending.renamed} name{pending.renamed === 1 ? '' : 's'} already in use here{' '}
+                {pending.renamed === 1 ? 'was' : 'were'} kept as-is and the incoming note renamed
+                instead — nothing existing is touched.
+              </>
+            )}
+          </p>
+          <div className="transfer-row">
+            <button
+              className="gate__ghost transfer-row__button"
+              disabled={busy !== null}
+              onClick={() => setPending(null)}
+            >
+              Cancel
+            </button>
+            <button className="gate__button" disabled={busy !== null} onClick={() => void confirmImport()}>
+              {busy === 'import'
+                ? 'Importing…'
+                : `Import ${pending.notes.length} note${pending.notes.length === 1 ? '' : 's'}`}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="transfer-row">
+          <button className="gate__ghost transfer-row__button" disabled={busy !== null} onClick={() => void runExport()}>
+            <Icon name="download" size={14} />
+            {busy === 'export' ? 'Exporting…' : 'Export vault'}
+          </button>
+          <button
+            className="gate__ghost transfer-row__button"
+            disabled={busy !== null}
+            onClick={() => fileInput.current?.click()}
+          >
+            <Icon name="upload" size={14} />
+            {busy === 'plan' ? 'Reading…' : 'Import vault'}
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".zip"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void planImport(file)
+            }}
+          />
+        </div>
+      )}
+
+      {lastImport && !pending && (
+        <div className="transfer-row">
+          <button className="gate__ghost transfer-row__button" disabled={busy !== null} onClick={() => void runUndo()}>
+            <Icon name="trash" size={14} />
+            {busy === 'undo'
+              ? 'Undoing…'
+              : `Undo last import (${lastImport.count} note${lastImport.count === 1 ? '' : 's'})`}
+          </button>
+        </div>
+      )}
     </section>
   )
 }

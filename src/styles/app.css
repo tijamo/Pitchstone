@@ -1007,6 +1007,16 @@ button {
 
 /* Import & export */
 
+.transfer-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
 .transfer-row {
   display: flex;
   flex-wrap: wrap;

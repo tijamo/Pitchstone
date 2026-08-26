@@ -15,6 +15,16 @@ import { folderNotePath, sanitizeSegment, uniquePath } from './paths'
 
 export type TransferNote = { path: string; content: string }
 
+/** What an import is about to do, computed entirely client-side before
+ * anything is written — so it can be shown to the person for confirmation. */
+export type ImportPlan = {
+  notes: TransferNote[]
+  /** How many of `notes` landed at a different path than the zip gave them,
+   * because that path was already taken — by the existing vault or by
+   * another entry in the same zip. Never an overwrite: see uniquePath. */
+  renamed: number
+}
+
 /** A path segment starting with '.' is Obsidian's own bookkeeping (`.obsidian`,
  * `.trash`, `.git`, `.DS_Store`, …), never a note the user meant to bring over. */
 function isHidden(path: string): boolean {
@@ -106,9 +116,10 @@ function planEmptyFolders(dirPaths: string[], occupiedPaths: Iterable<string>): 
 export function planImport(
   entries: { path: string; isDir: boolean; content: string }[],
   existingPaths: Iterable<string>,
-): TransferNote[] {
+): ImportPlan {
   const taken = new Set(existingPaths)
   const notes: TransferNote[] = []
+  let renamed = 0
 
   for (const entry of entries) {
     if (!shouldImportEntry(entry.path, entry.isDir)) continue
@@ -116,11 +127,12 @@ export function planImport(
     if (!sanitized) continue
 
     const path = uniquePath(taken, sanitized)
+    if (path !== sanitized) renamed++
     taken.add(path)
     notes.push({ path, content: entry.content })
   }
 
-  return notes
+  return { notes, renamed }
 }
 
 // ---------------------------------------------------------------------------
@@ -138,13 +150,15 @@ export async function exportVault(notes: TransferNote[]): Promise<Blob> {
   return zip.generateAsync({ type: 'blob' })
 }
 
-/** Read a zip's markdown files into import-ready notes. `existingPaths` is
- * the caller's current vault, so a name already in use is suffixed rather
- * than silently overwritten. */
-export async function importVault(
+/** Read a zip's markdown files into an import plan — nothing is written yet,
+ * so the caller can show it to the person before committing. `existingPaths`
+ * is the current vault, so a name already in use is suffixed rather than
+ * silently overwritten; see ImportPlan's `renamed` count for how often that
+ * happened. */
+export async function planImportFromZip(
   file: Blob,
   existingPaths: Iterable<string>,
-): Promise<TransferNote[]> {
+): Promise<ImportPlan> {
   const { default: JSZip } = await import('jszip')
   const zip = await JSZip.loadAsync(file)
 
@@ -156,13 +170,16 @@ export async function importVault(
     })),
   )
 
-  const notes = planImport(entries, existingPaths)
+  const plan = planImport(entries, existingPaths)
 
   const dirPaths = entries
     .filter((e) => e.isDir && !isHidden(e.path))
     .map((e) => sanitizeImportDirPath(e.path))
     .filter((p): p is string => p !== null)
-  const folderNotes = planEmptyFolders(dirPaths, [...existingPaths, ...notes.map((n) => n.path)])
+  const folderNotes = planEmptyFolders(dirPaths, [
+    ...existingPaths,
+    ...plan.notes.map((n) => n.path),
+  ])
 
-  return [...notes, ...folderNotes]
+  return { notes: [...plan.notes, ...folderNotes], renamed: plan.renamed }
 }
