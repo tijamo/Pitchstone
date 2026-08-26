@@ -314,6 +314,25 @@ can read and write the same vault.
   TypeScript one. `pitchstone_reindex_note` writes the derived data without
   touching `content`, and the write trigger leaves `updated_at` alone when
   neither text nor path changed, so a backfill doesn't restamp the vault.
+- **A vault is already an Obsidian vault**, so import/export (v0.14,
+  `lib/vaultTransfer.ts`) is a zip of `.md` files at their own paths, nothing
+  bespoke. Export needs no schema help — every note's `content` already holds
+  its own frontmatter and `[[links]]` as text. Import sanitizes each zip path
+  the same way a manual rename does, dedupes a collision with `uniquePath`,
+  and leaves tags/frontmatter/links for the next load's backfill to derive —
+  see "Derived data is rebuildable" above. JSZip is dynamic-`import()`-ed from
+  the Settings modal, so it never reaches the main bundle unused.
+- **A folder can be a note, by the same convention Obsidian's "Folder Notes"
+  plugin uses.** `paths.ts`'s `folderNotePath(folder)` names the note at
+  `<folder>/<folder-name>.md`; `buildTree` recognizes one and attaches it to
+  the folder (without removing it from the listing), and `FileTree`/
+  `GraphView` open it when the folder row or graph square is clicked,
+  highlighting like an active note while keeping the folder's own icon. This
+  is still just a note at a path — no schema change — which is what makes a
+  folder with nothing else in it survive at all: `vaultTransfer.ts` gives an
+  otherwise-empty directory from an imported zip exactly one such note (the
+  deepest empty directory only; a note at `A/B/B.md` already keeps `A` alive
+  too), so an empty folder now round-trips instead of silently vanishing.
 
 The phase-by-phase build plan was agreed with Tim in conversation on
 2026-08-19 and **is not written down anywhere in this repo** — not as a doc, an
@@ -402,11 +421,12 @@ Ask rather than guessing, and write the answer down here when you get it.
   `EditorPane`, `StatusBar`, `LoginGate`), the panels (`FileTree`,
   `SearchPanel`, `TagsPanel`, `GraphView`), `SettingsModal`, `LinkChoice` (the
   ambiguous-link popover), `Resizer`, `Icon`, and `Mark`.
-- `src/lib/` — the Supabase client, vault path helpers (`paths.ts`), the note
-  data access layer (`notes.ts`), personal tokens (`tokens.ts`), live updates
-  (`live.ts`), and `markdown/parse.ts` (shared extraction) and
-  `markdown/resolve.ts` (shared title/path matching) — see Architecture — each
-  with its unit tests beside it.
+- `src/lib/` — the Supabase client, vault path helpers (`paths.ts`, unit
+  tested), the note data access layer (`notes.ts`), personal tokens
+  (`tokens.ts`), live updates (`live.ts`), zip import/export
+  (`vaultTransfer.ts`), and `markdown/parse.ts` (shared extraction, unit
+  tested) and `markdown/resolve.ts` (shared title/path matching, unit tested)
+  — see Architecture.
 - `src/components/editor/` — the CodeMirror 6 editor: the wikilink syntax
   extension, the live-preview decorations, the theme, and `[[` completion.
 - `supabase/migrations/` — the applied schema, kept in the repo for the record.
@@ -446,7 +466,12 @@ Ask rather than guessing, and write the answer down here when you get it.
   so a Playwright run that can't find `#email` usually means a missing
   `.env.local`, not a broken selector.
 - **Folders are derived from paths**, not stored. A folder exists exactly as
-  long as a note sits in it, so there is no such thing as an empty folder.
+  long as a note sits in it — and since v0.14, that note can be the folder's
+  own: `folderNotePath` names the note at `<folder>/<folder-name>.md`,
+  Obsidian's own "Folder Notes" convention, and `buildTree`/`GraphView`
+  recognize it and let it stand in for the folder (openable, highlighted when
+  active) while it keeps the folder's own icon rather than a note's. Nothing
+  about this needed a schema change — it's still just a note at a path.
 - **Wikilinks are parsed twice, and the two must agree.** `lib/markdown/parse.ts`
   scans note text for storage and search; `components/editor/wikilinkSyntax.ts`
   is a lezer inline parser so the editor ignores links inside code blocks.
@@ -544,7 +569,6 @@ Worth knowing so they don't get "fixed" by accident:
 - **Offline access to the vault.** The precache is the app shell; notes need
   the network. Real offline means a sync queue and conflict handling, which is
   a feature in its own right, not a side effect of having a service worker.
-- **Empty folders.** They cannot exist — see the gotcha above.
 - **Unlinked mentions**, clickable `#tags` inside the editor, and search over
   tags. All plausible, none built, none promised.
 - **MCP resources and prompts.** The server advertises tools only. A note is

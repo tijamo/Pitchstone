@@ -11,7 +11,7 @@
  * `import()` from the call site, never from this module's own top level.
  */
 
-import { sanitizeSegment, uniquePath } from './paths'
+import { folderNotePath, sanitizeSegment, uniquePath } from './paths'
 
 export type TransferNote = { path: string; content: string }
 
@@ -48,6 +48,52 @@ export function sanitizeImportPath(rawPath: string): string | null {
 
   const path = [...dirSegments, `${stem}.md`].join('/')
   return path.length >= 4 && path.length <= 512 ? path : null
+}
+
+/** The same sanitizing as sanitizeImportPath, but for a directory entry: no
+ * extension to normalize, and an empty result (every segment illegal, or the
+ * path was the zip root itself) means there's no folder here to keep. */
+function sanitizeImportDirPath(rawPath: string): string | null {
+  const segments = rawPath
+    .split('/')
+    .filter((s) => s.length > 0)
+    .map(sanitizeSegment)
+    .filter((s) => s.length > 0 && s !== '.' && s !== '..')
+  return segments.length > 0 ? segments.join('/') : null
+}
+
+/**
+ * A directory from the zip that ends up with no note anywhere inside it —
+ * empty in the source vault — would otherwise vanish without a trace:
+ * Pitchstone has no other way to remember a folder exists (see paths.ts's
+ * file-level note). Giving it its own note at folderNotePath keeps it alive
+ * exactly the way a manually created one would. Only the deepest such
+ * directories get one: a note at `A/B/B.md` already keeps `A` around too, so
+ * `A` doesn't need a note of its own as well.
+ */
+function planEmptyFolders(dirPaths: string[], occupiedPaths: Iterable<string>): TransferNote[] {
+  const occupied = new Set(occupiedPaths)
+  const isEmpty = (dir: string) => {
+    const prefix = `${dir}/`
+    for (const path of occupied) {
+      if (path.startsWith(prefix)) return false
+    }
+    return true
+  }
+
+  const folderNotes: TransferNote[] = []
+  // Deepest first, so a folder note created for a nested empty directory
+  // already covers its parents by the time they're checked.
+  const deepestFirst = [...new Set(dirPaths)].sort(
+    (a, b) => b.split('/').length - a.split('/').length,
+  )
+  for (const dir of deepestFirst) {
+    if (!isEmpty(dir)) continue
+    const path = folderNotePath(dir)
+    occupied.add(path)
+    folderNotes.push({ path, content: '' })
+  }
+  return folderNotes
 }
 
 /**
@@ -110,5 +156,13 @@ export async function importVault(
     })),
   )
 
-  return planImport(entries, existingPaths)
+  const notes = planImport(entries, existingPaths)
+
+  const dirPaths = entries
+    .filter((e) => e.isDir && !isHidden(e.path))
+    .map((e) => sanitizeImportDirPath(e.path))
+    .filter((p): p is string => p !== null)
+  const folderNotes = planEmptyFolders(dirPaths, [...existingPaths, ...notes.map((n) => n.path)])
+
+  return [...notes, ...folderNotes]
 }

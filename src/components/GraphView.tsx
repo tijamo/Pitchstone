@@ -14,7 +14,7 @@ import { useUiStore } from '../store/uiStore'
 import { listLinks } from '../lib/notes'
 import type { NoteMeta } from '../lib/notes'
 import { matchNotesByTarget } from '../lib/markdown/resolve'
-import { basename, dirname, folderGraphId } from '../lib/paths'
+import { basename, dirname, folderGraphId, folderNotePath } from '../lib/paths'
 import { Icon } from './Icon'
 
 type GraphNode = SimulationNodeDatum & {
@@ -30,6 +30,10 @@ type GraphNode = SimulationNodeDatum & {
   /** A real note's or folder's vault-relative path, for the hover tooltip.
    * Absent for an unresolved/ambiguous placeholder — it doesn't have one. */
   path?: string
+  /** The folder's own note (see paths.ts's folderNotePath), if it has one —
+   * lets a folder node open and highlight like a note while still drawing
+   * with the folder's own square icon. Only ever set when folder is true. */
+  noteId?: string
 }
 type GraphLink = SimulationLinkDatum<GraphNode> & {
   /** A note-in-folder or folder-in-folder edge, not a [[wikilink]] — drawn
@@ -343,16 +347,20 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         if (node.x == null || node.y == null) continue
         const p = project(node.x, node.y)
         const r = radiusOf(node)
-        const isActive = node.id === activeIdRef.current
+        const isActive = node.folder
+          ? node.noteId != null && node.noteId === activeIdRef.current
+          : node.id === activeIdRef.current
         ctx!.globalAlpha =
           hoverId != null && node.id !== hoverId && !neighbors.has(node.id) ? 0.25 : 1
 
         ctx!.beginPath()
         if (node.folder) {
           // A square, not a circle: a folder is a place notes sit in, not a
-          // note itself, so it reads as a different kind of thing at a glance.
+          // note itself, so it reads as a different kind of thing at a glance
+          // — even one with its own note (see paths.ts's folderNotePath)
+          // keeps this shape, and only picks up the active note's color.
           ctx!.rect(p.x - r, p.y - r, r * 2, r * 2)
-          ctx!.strokeStyle = nodeColor
+          ctx!.strokeStyle = isActive ? accent : nodeColor
           ctx!.stroke()
         } else {
           ctx!.arc(p.x, p.y, r, 0, Math.PI * 2)
@@ -370,7 +378,9 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         }
 
         ctx!.fillStyle = node.folder
-          ? nodeColor
+          ? isActive
+            ? accent
+            : nodeColor
           : node.unresolved
             ? node.ambiguous
               ? ambiguousColor
@@ -453,6 +463,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       // shares one placeholder node, keyed by the title rather than an id.
       const placeholderId = (title: string) => `unresolved:${title.toLowerCase()}`
       const byNoteId = new Map(notes.map((n) => [n.id, n]))
+      const byPath = new Map(notes.map((n) => [n.path, n]))
 
       const endpoints = edges
         .filter((e) => byNoteId.has(e.source_note_id))
@@ -518,6 +529,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
           ambiguous: false,
           folder: true,
           path,
+          noteId: byPath.get(folderNotePath(path))?.id,
         }
         folderNodes.set(path, created)
         const parent = dirname(path)
@@ -586,11 +598,13 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     // A node opens or moves depending on how the pointer that landed on it
     // released — shared by the mouse click path and the touch tap path below.
     function openNode(node: GraphNode, at: { clientX: number; clientY: number }) {
-      // A folder pseudo-node names a place, not a note — nothing to open.
-      // Opening a placeholder writes the note it stands for, which is what
-      // following the wikilink itself would have done.
+      // A folder pseudo-node names a place, not a note — unless it has its
+      // own note (see paths.ts's folderNotePath), in which case opening it
+      // behaves exactly like opening that note. Opening a placeholder writes
+      // the note it stands for, which is what following the wikilink itself
+      // would have done.
       if (node.folder) {
-        // no-op
+        if (node.noteId) void open(node.noteId)
       } else if (node.ambiguous) {
         const matches = matchNotesByTarget(notes, node.title)
         useUiStore.getState().setLinkChoice({
@@ -831,16 +845,22 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     // Focus mode's own entry/exit gesture — deliberately separate from the
     // plain click above (which already opens a note): a double-click on any
     // node, note or not, commits to viewing just its branches, and one on
-    // empty canvas backs back out to the whole graph. A folder or an
-    // unresolved/ambiguous placeholder has no note to open, so only a real
-    // note's double-click also opens it.
+    // empty canvas backs back out to the whole graph. An unresolved/ambiguous
+    // placeholder has no note to open; a folder does only if it has its own
+    // (see paths.ts's folderNotePath).
     function handleDoubleClick(e: MouseEvent) {
       const rect = canvas!.getBoundingClientRect()
       const sx = e.clientX - rect.left
       const sy = e.clientY - rect.top
       const node = nodeAt(sx, sy)
       if (node) {
-        if (!node.folder && !node.unresolved) void open(node.id)
+        if (!node.unresolved) {
+          if (node.folder) {
+            if (node.noteId) void open(node.noteId)
+          } else {
+            void open(node.id)
+          }
+        }
         useUiStore.getState().focusGraph(node.id)
       } else {
         setGraphFocus(false)

@@ -58,16 +58,23 @@ function TreeRow({
 
   if (node.kind === 'folder') {
     const isCollapsed = collapsed.has(node.path)
+    const isActive = node.note?.id === activeId
     return (
       <li role="treeitem" aria-expanded={!isCollapsed}>
-        <div className="tree__row tree__row--folder" style={indent}>
+        <div className={`tree__row tree__row--folder${isActive ? ' tree__row--active' : ''}`} style={indent}>
           <button
             className="tree__label"
             onClick={() => {
               onToggle(node.path)
-              // A folder has no note to open, but it is still a real node in
-              // the graph — see GraphView's focus mode.
-              focusGraph(folderGraphId(node.path))
+              // A folder with its own note (see paths.ts's folderNotePath)
+              // opens like any other note; either way it's still a real node
+              // in the graph — see GraphView's focus mode.
+              if (node.note) {
+                void open(node.note.id)
+                focusGraph(node.note.id)
+              } else {
+                focusGraph(folderGraphId(node.path))
+              }
             }}
             title={node.path}
           >

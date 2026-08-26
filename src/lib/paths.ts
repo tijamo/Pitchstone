@@ -48,6 +48,20 @@ export function sanitizeSegment(name: string): string {
 }
 
 /**
+ * The path of a folder's own note, by the same convention Obsidian's "Folder
+ * Notes" plugin uses: a note named after its folder, sitting inside it — e.g.
+ * `Projects` → `Projects/Projects.md`. This is the only thing that lets a
+ * folder with nothing else in it exist at all (see the file-level note on
+ * folders never being stored otherwise), and it's why one written this way is
+ * exportable and importable like any other note: nothing about it is special
+ * to the schema, only to buildTree and the graph, which recognize it and let
+ * it stand in for the folder — see extractFolderNotes below.
+ */
+export function folderNotePath(folderPath: string): string {
+  return `${folderPath}/${basename(folderPath)}.md`
+}
+
+/**
  * Turn free text typed into a rename box into a full vault path.
  *
  * Slashes are meaningful: typing `Projects/Pitchstone` moves the note into
@@ -99,6 +113,11 @@ export type TreeFolder<T> = {
   name: string
   path: string
   children: TreeNode<T>[]
+  /** The note at this folder's own `folderNotePath`, if one exists — kept
+   * alongside the folder rather than in its place, since it's still a normal
+   * note in the list underneath. Lets a folder be opened and focused in the
+   * graph like a note, while still drawing with the folder's own icon. */
+  note?: T
 }
 export type TreeNode<T> = TreeFile<T> | TreeFolder<T>
 
@@ -157,7 +176,23 @@ export function buildTree<T extends { path: string; title: string; parent?: stri
   reparent(notes, fileNodes, root, matchByTarget)
 
   sortTree(root.children)
+  attachFolderNotes(root.children)
   return root.children
+}
+
+/** Recognizes each folder's own note by path convention (see
+ * folderNotePath) and attaches it, without removing it from the folder's
+ * children — it's still a normal note in the list, just also the folder's. */
+function attachFolderNotes<T extends { path: string }>(nodes: TreeNode<T>[]): void {
+  for (const node of nodes) {
+    if (node.kind !== 'folder') continue
+    attachFolderNotes(node.children)
+    const ownPath = folderNotePath(node.path)
+    const own = node.children.find(
+      (child): child is TreeFile<T> => child.kind === 'file' && child.path === ownPath,
+    )
+    if (own) node.note = own.note
+  }
 }
 
 function reparent<T extends { path: string; title: string; parent?: string | null }>(

@@ -99,3 +99,30 @@ describe('buildTree — parent nesting', () => {
     assert.deepEqual(names(t), ['A', 'B', 'C'])
   })
 })
+
+describe('buildTree — folder notes', () => {
+  it('attaches a note named after its folder to that folder, without removing it', () => {
+    const t = tree([note('Projects/Projects.md'), note('Projects/Other.md')])
+    const projects = folderNode(t, 'Projects')
+    assert.equal(projects.note?.path, 'Projects/Projects.md')
+    assert.deepEqual(names(projects.children), ['Other', 'Projects'])
+  })
+
+  it('leaves a folder without a matching note alone', () => {
+    const t = tree([note('Projects/Other.md')])
+    assert.equal(folderNode(t, 'Projects').note, undefined)
+  })
+
+  it('does not attach a note from a different folder at the same depth', () => {
+    const t = tree([note('A/A.md'), note('B/Other.md')])
+    assert.equal(folderNode(t, 'A').note?.path, 'A/A.md')
+    assert.equal(folderNode(t, 'B').note, undefined)
+  })
+
+  it('attaches folder notes at every depth independently', () => {
+    const t = tree([note('A/A.md'), note('A/B/B.md')])
+    const a = folderNode(t, 'A')
+    assert.equal(a.note?.path, 'A/A.md')
+    assert.equal(folderNode(a.children, 'B').note?.path, 'A/B/B.md')
+  })
+})

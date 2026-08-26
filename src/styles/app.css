@@ -488,6 +488,10 @@ button {
   color: var(--text-faint);
 }
 
+.tree__row--folder.tree__row--active {
+  color: var(--text-normal);
+}
+
 .tree__label {
   display: flex;
   align-items: center;
