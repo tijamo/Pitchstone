@@ -23,6 +23,8 @@ export type IconName =
   | 'log-out'
   | 'help'
   | 'users'
+  | 'download'
+  | 'upload'
 
 const PATHS: Record<IconName, ReactElement> = {
   'file-plus': (
@@ -137,6 +139,18 @@ const PATHS: Record<IconName, ReactElement> = {
       <path d="M3.5 20a5.5 5.5 0 0 1 11 0" />
       <path d="M15.5 6.2a3.2 3.2 0 0 1 0 6.2" />
       <path d="M17 14.3a5.5 5.5 0 0 1 3.5 5.1" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M12 3v12M7 10l5 5 5-5" />
+      <path d="M4 19h16" />
+    </>
+  ),
+  upload: (
+    <>
+      <path d="M12 15V3M7 8l5-5 5 5" />
+      <path d="M4 19h16" />
     </>
   ),
 }

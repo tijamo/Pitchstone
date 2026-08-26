@@ -72,6 +72,33 @@ export async function listNotes(): Promise<NoteMeta[]> {
   return (data ?? []).map((row) => toMeta(row as RawMeta))
 }
 
+/** Every note with its content, for export — the note list plus content is
+ * the only way to write a full copy of the vault out to a file. */
+export async function fetchAllNotes(): Promise<Note[]> {
+  const { data, error } = await db()
+    .from('pitchstone_notes')
+    .select(`${META_COLUMNS}, content`)
+    .order('path')
+  if (error) throw error
+  return (data ?? []).map((row) => toNote(row as RawMeta & { content: string }))
+}
+
+/** Batch insert for an import: chunked so a large vault doesn't go over in
+ * one request, tags/frontmatter/links left for the next load's backfill to
+ * derive rather than computed here — see "Derived data is rebuildable". */
+export async function createNotes(rows: { path: string; content: string }[]): Promise<void> {
+  const CHUNK_SIZE = 200
+  for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+    const { error } = await db()
+      .from('pitchstone_notes')
+      .insert(rows.slice(i, i + CHUNK_SIZE))
+    if (error) throw error
+  }
+  // A batch of new notes can resolve links that were dangling, same as a
+  // single create — see resolveLinks's own note on when to call it.
+  await resolveLinks()
+}
+
 export async function fetchNote(id: string): Promise<Note> {
   const { data, error } = await db()
     .from('pitchstone_notes')

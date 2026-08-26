@@ -11,6 +11,14 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.14',
+    title: 'Import and export your vault',
+    items: [
+      "Settings → Import & export writes every note to a .zip of .md files, laid out the same way an Obsidian vault folder is — frontmatter, [[wikilinks]], and #tags come along as plain text, since that's all a note already is.",
+      "Importing reads one of those zips back in: a new note for every .md file inside, nested folders kept, and a name already in the vault renamed rather than overwritten. Attachments and Obsidian's own settings aren't carried over — Pitchstone has nowhere to put them.",
+    ],
+  },
+  {
     ver: '0.13',
     title: 'Sign-ups now wait for approval',
     items: [

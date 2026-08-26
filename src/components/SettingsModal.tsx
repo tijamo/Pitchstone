@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
 import { useUiStore, type Theme } from '../store/uiStore'
 import { useApprovalStore } from '../store/approvalStore'
-import { describeError } from '../lib/notes'
+import { useVaultStore } from '../store/vaultStore'
+import { createNotes, describeError, fetchAllNotes } from '../lib/notes'
 import { createToken, listTokens, revokeToken, type ApiToken } from '../lib/tokens'
 
 /**
@@ -47,6 +48,7 @@ export function SettingsModal() {
         </header>
 
         <Appearance />
+        <ImportExport />
         <ClaudeAccess />
         <UserManagement />
         <About />
@@ -81,6 +83,114 @@ function Appearance() {
             {label}
           </button>
         ))}
+      </div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * A vault is already just a folder of `.md` files with frontmatter and
+ * `[[wikilinks]]` — the same shape Obsidian itself uses — so moving one in or
+ * out is a zip, not a bespoke format. Both directions dynamic-`import()` the
+ * zip logic (see vaultTransfer.ts) so JSZip never lands in the main bundle for
+ * someone who never touches this section.
+ */
+function ImportExport() {
+  const notes = useVaultStore((s) => s.notes)
+  const load = useVaultStore((s) => s.load)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState<'export' | 'import' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<string | null>(null)
+
+  const runExport = async () => {
+    setBusy('export')
+    setError(null)
+    setResult(null)
+    try {
+      const all = await fetchAllNotes()
+      const { exportVault } = await import('../lib/vaultTransfer')
+      const blob = await exportVault(all)
+      downloadBlob(blob, `pitchstone-vault-${new Date().toISOString().slice(0, 10)}.zip`)
+    } catch (e) {
+      setError(describeError(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const runImport = async (file: File) => {
+    setBusy('import')
+    setError(null)
+    setResult(null)
+    try {
+      const { importVault } = await import('../lib/vaultTransfer')
+      const rows = await importVault(file, new Set(notes.map((n) => n.path)))
+      if (rows.length === 0) {
+        setError("No markdown notes found in that file — Pitchstone can't carry over attachments.")
+        return
+      }
+      await createNotes(rows)
+      await load()
+      setResult(`Imported ${rows.length} note${rows.length === 1 ? '' : 's'}.`)
+    } catch (e) {
+      setError(describeError(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <section className="modal__section">
+      <h3 className="modal__heading">
+        <Icon name="download" size={14} /> Import &amp; export
+      </h3>
+      <p className="modal__note">
+        Export writes every note to a <code>.zip</code> of <code>.md</code> files, laid out the
+        way an Obsidian vault folder is. Import reads one of those back in, adding a note for
+        each file alongside what's already here — a name already in use is kept, not
+        overwritten. Neither carries attachments or Obsidian's own settings; Pitchstone has
+        nowhere to put them.
+      </p>
+
+      {error && <p className="gate__error">{error}</p>}
+      {result && !error && <p className="modal__note modal__note--faint">{result}</p>}
+
+      <div className="transfer-row">
+        <button className="gate__ghost transfer-row__button" disabled={busy !== null} onClick={() => void runExport()}>
+          <Icon name="download" size={14} />
+          {busy === 'export' ? 'Exporting…' : 'Export vault'}
+        </button>
+        <button
+          className="gate__ghost transfer-row__button"
+          disabled={busy !== null}
+          onClick={() => fileInput.current?.click()}
+        >
+          <Icon name="upload" size={14} />
+          {busy === 'import' ? 'Importing…' : 'Import vault'}
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".zip"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            event.target.value = ''
+            if (file) void runImport(file)
+          }}
+        />
       </div>
     </section>
   )

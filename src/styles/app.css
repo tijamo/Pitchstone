@@ -1001,6 +1001,20 @@ button {
   color: var(--accent);
 }
 
+/* Import & export */
+
+.transfer-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transfer-row__button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Tokens */
 
 .token-new {
