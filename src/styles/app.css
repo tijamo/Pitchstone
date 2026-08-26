@@ -831,6 +831,10 @@ button {
   height: 100%;
   cursor: grab;
   touch-action: none;
+  /* iOS's own long-press callout (Copy/Look Up/Save) fires — with its own
+   * haptic — independently of touch-action and of preventDefault on the
+   * pointer event; this is the property that actually turns it off there. */
+  -webkit-touch-callout: none;
 }
 
 .graph-view__canvas:active {

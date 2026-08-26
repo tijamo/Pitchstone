@@ -343,6 +343,13 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       // Rounded to a step so a drag-resize reuses cache entries instead of
       // measuring every title afresh at every intermediate pixel width.
       const maxLabel = Math.max(60, Math.round((width * 0.4) / 20) * 20)
+      // A note's label fades out below the graph's default zoom, so a
+      // zoomed-out, crowded vault reads as nodes and edges rather than a wall
+      // of overlapping text — 1 at the default zoom and above, down to fully
+      // gone at MIN_ZOOM. Folders are exempt: there are far fewer of them,
+      // they don't crowd the way note labels do, and they're what orients a
+      // zoomed-out view in the first place.
+      const labelZoomFade = Math.min(1, Math.max(0, (transformRef.current.k - MIN_ZOOM) / (1 - MIN_ZOOM)))
       for (const node of nodesRef.current) {
         if (node.x == null || node.y == null) continue
         const p = project(node.x, node.y)
@@ -350,8 +357,8 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         const isActive = node.folder
           ? node.noteId != null && node.noteId === activeIdRef.current
           : node.id === activeIdRef.current
-        ctx!.globalAlpha =
-          hoverId != null && node.id !== hoverId && !neighbors.has(node.id) ? 0.25 : 1
+        const dimmed = hoverId != null && node.id !== hoverId && !neighbors.has(node.id)
+        ctx!.globalAlpha = dimmed ? 0.25 : 1
 
         ctx!.beginPath()
         if (node.folder) {
@@ -388,6 +395,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
             : isActive
               ? accent
               : labelColor
+        ctx!.globalAlpha = node.folder ? ctx!.globalAlpha : (dimmed ? 0.25 : 1) * labelZoomFade
         ctx!.fillText(fitLabel(ctx!, node.title, maxLabel, labelCache), p.x + r + 4, p.y)
       }
       ctx!.globalAlpha = 1
@@ -639,6 +647,14 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       const sy = e.clientY - rect.top
 
       if (e.pointerType === 'touch') {
+        // Without this, a still finger is also a long-press to the browser's
+        // own gesture recognizer — which fires its context-menu/selection
+        // haptic regardless of what's underneath, node or empty canvas,
+        // entirely independently of the hold-to-drag timer below. Telling it
+        // up front that this touch is ours is what stops that buzz on empty
+        // canvas; the deliberate vibrate a real drag start gives (below) is
+        // the only haptic feedback left once this is in place.
+        e.preventDefault()
         activeTouchesRef.current.set(e.pointerId, { x: sx, y: sy })
         const anchor = pinchAnchor()
         if (anchor) {
@@ -682,6 +698,10 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
           pending.node.fy = pending.node.y
           dragRef.current = { node: pending.node, moved: false }
           simRef.current?.alphaTarget(0.3).restart()
+          // A node is the only thing that ever gets this far, so this is the
+          // one moment worth a tick — confirmation that the hold picked
+          // something up, not a generic "you held still" buzz.
+          navigator.vibrate?.(10)
         }, TOUCH_LONG_PRESS_MS)
       } else if (node) {
         node.fx = node.x
