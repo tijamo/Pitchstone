@@ -339,7 +339,8 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       ctx!.globalAlpha = 1
 
       ctx!.font = FONT
-      ctx!.textBaseline = 'middle'
+      ctx!.textAlign = 'center'
+      ctx!.textBaseline = 'top'
       // Rounded to a step so a drag-resize reuses cache entries instead of
       // measuring every title afresh at every intermediate pixel width.
       const maxLabel = Math.max(60, Math.round((width * 0.4) / 20) * 20)
@@ -396,7 +397,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
               ? accent
               : labelColor
         ctx!.globalAlpha = node.folder ? ctx!.globalAlpha : (dimmed ? 0.25 : 1) * labelZoomFade
-        ctx!.fillText(fitLabel(ctx!, node.title, maxLabel, labelCache), p.x + r + 4, p.y)
+        ctx!.fillText(fitLabel(ctx!, node.title, maxLabel, labelCache), p.x, p.y + r + 4)
       }
       ctx!.globalAlpha = 1
     }
