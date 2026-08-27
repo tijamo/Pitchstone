@@ -31,12 +31,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     const sb = supabase
 
-    void sb.auth.getSession().then(({ data }) => set({ session: data.session, loading: false }))
+    // getSession() reads a stored session and, if it looks stale, refreshes
+    // it over the network — a call with no timeout of its own. A hung
+    // service worker (an installed PWA is the case most exposed to this,
+    // between one update finishing its precache and actually activating) can
+    // leave that hanging indefinitely, which otherwise strands the sign-in
+    // gate on "Restoring your session…" with no way out but clearing storage.
+    // Falling through to the sign-in form is always safe: a session that
+    // does arrive late still lands via onAuthStateChange below, and one that
+    // never does just means signing in again, same as if it had failed
+    // outright.
+    let settled = false
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      set({ loading: false })
+    }, 8000)
 
-    const { data } = sb.auth.onAuthStateChange((_event, session) =>
-      set({ session, loading: false }),
-    )
-    return () => data.subscription.unsubscribe()
+    void sb.auth.getSession().then(({ data }) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      set({ session: data.session, loading: false })
+    })
+
+    const { data } = sb.auth.onAuthStateChange((_event, session) => {
+      settled = true
+      clearTimeout(timeout)
+      set({ session, loading: false })
+    })
+    return () => {
+      clearTimeout(timeout)
+      data.subscription.unsubscribe()
+    }
   },
 
   setMode: (mode) => set({ mode, error: null }),
