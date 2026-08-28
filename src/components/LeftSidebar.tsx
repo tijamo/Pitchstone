@@ -1,8 +1,9 @@
-import { useUiStore, type LeftTab } from '../store/uiStore'
+import { fittedWidth, useUiStore, type LeftTab } from '../store/uiStore'
 import { useVaultStore } from '../store/vaultStore'
 import { FileTree } from './FileTree'
 import { SearchPanel } from './SearchPanel'
 import { TagsPanel } from './TagsPanel'
+import { GraphView } from './GraphView'
 import { Resizer } from './Resizer'
 import { Icon } from './Icon'
 
@@ -10,6 +11,7 @@ const TABS: { tab: LeftTab; label: string }[] = [
   { tab: 'files', label: 'Files' },
   { tab: 'search', label: 'Search' },
   { tab: 'tags', label: 'Tags' },
+  { tab: 'graph', label: 'Graph' },
 ]
 
 export function LeftSidebar() {
@@ -17,6 +19,8 @@ export function LeftSidebar() {
   const leftOpen = useUiStore((s) => s.leftOpen)
   const leftWidth = useUiStore((s) => s.leftWidth)
   const mobile = useUiStore((s) => s.mobile)
+  const viewport = useUiStore((s) => s.viewport)
+  const rightReserved = useUiStore((s) => (s.rightOpen ? s.rightWidth : 0))
   const setLeftTab = useUiStore((s) => s.setLeftTab)
   const setLinkCheckOpen = useUiStore((s) => s.setLinkCheckOpen)
 
@@ -25,12 +29,17 @@ export function LeftSidebar() {
   const create = useVaultStore((s) => s.create)
 
   // A drawer's width is CSS's on mobile — it is not resizable there, and an
-  // inline width would win over the stylesheet.
-  const width = mobile ? undefined : { width: leftOpen ? leftWidth : 0 }
+  // inline width would win over the stylesheet. On a desktop the panel renders
+  // at what it was dragged to, held to what this window can currently show.
+  const width = mobile
+    ? undefined
+    : { width: leftOpen ? fittedWidth(leftWidth, rightReserved, viewport) : 0 }
 
   return (
     <aside
-      className={`sidebar sidebar--left${leftOpen ? '' : ' sidebar--collapsed'}`}
+      className={`sidebar sidebar--left${leftOpen ? '' : ' sidebar--collapsed'}${
+        leftTab === 'graph' ? ' sidebar--graph' : ''
+      }`}
       style={width}
       aria-hidden={!leftOpen}
     >
@@ -48,7 +57,11 @@ export function LeftSidebar() {
         ))}
       </div>
 
-      {leftTab === 'files' ? (
+      {leftTab === 'graph' ? (
+        <div className="sidebar__body sidebar__body--flush">
+          <GraphView />
+        </div>
+      ) : leftTab === 'files' ? (
         <>
           <div className="sidebar__header">
             <span className="sidebar__header-label">

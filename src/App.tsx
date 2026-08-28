@@ -19,6 +19,7 @@ import { useVaultStore } from './store/vaultStore'
 export function App() {
   const theme = useUiStore((s) => s.theme)
   const setMobile = useUiStore((s) => s.setMobile)
+  const setViewport = useUiStore((s) => s.setViewport)
 
   // The breakpoint is watched rather than measured once, so rotating a phone
   // or dragging a desktop window narrow rearranges the shell as it happens.
@@ -29,6 +30,16 @@ export function App() {
     query.addEventListener('change', sync)
     return () => query.removeEventListener('change', sync)
   }, [setMobile])
+
+  // The window's width matters on its own, not only at the breakpoint: a panel
+  // can be dragged to full width, and a window later made smaller than that has
+  // to fit it back in rather than push the editor off the side.
+  useEffect(() => {
+    const sync = () => setViewport(window.innerWidth)
+    sync()
+    window.addEventListener('resize', sync)
+    return () => window.removeEventListener('resize', sync)
+  }, [setViewport])
 
   // No stored preference means "follow the OS", which the CSS handles on its
   // own — so the attribute is removed rather than set to a resolved value.

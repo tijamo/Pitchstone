@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import type { NoteMeta } from '../lib/notes'
 
-export type LeftTab = 'files' | 'search' | 'tags'
-export type RightTab = 'backlinks' | 'outline' | 'graph'
+export type LeftTab = 'files' | 'search' | 'tags' | 'graph'
+export type RightTab = 'backlinks' | 'outline'
 export type Theme = 'dark' | 'light'
 
 /**
@@ -19,11 +19,11 @@ const RIGHT_WIDTH_KEY = 'pitchstone:rightWidth'
 
 /**
  * Panel widths are the user's to set and are remembered between sessions;
- * these are only the first-run values. The right panel starts wider than the
- * left because the graph lives there and needs the room.
+ * these are only the first-run values. The left panel starts wider than it
+ * used to because the graph lives there now and benefits from the room.
  */
-export const DEFAULT_LEFT_WIDTH = 260
-export const DEFAULT_RIGHT_WIDTH = 320
+export const DEFAULT_LEFT_WIDTH = 300
+export const DEFAULT_RIGHT_WIDTH = 300
 
 /**
  * Below this width the shell folds to a single pane: the sidebars become
@@ -37,30 +37,41 @@ export function isMobileWidth(): boolean {
   return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches
 }
 
-/** Narrow enough to be worth keeping, wide enough to still leave an editor. */
+/** Narrow enough to be worth keeping. */
 export const MIN_PANEL_WIDTH = 180
+/** The first-run ceiling only — see maxPanelWidth for the real one. */
 export const MAX_PANEL_WIDTH = 560
 
 export function clampWidth(width: number, max = MAX_PANEL_WIDTH): number {
-  return Math.min(max, Math.max(MIN_PANEL_WIDTH, Math.round(width)))
+  return Math.min(Math.max(max, MIN_PANEL_WIDTH), Math.max(MIN_PANEL_WIDTH, Math.round(width)))
 }
 
 const RIBBON_WIDTH = 44
-/** However narrow the editor is allowed to get before it stops giving up room. */
-const MIN_EDITOR_WIDTH = 360
 
 /**
- * The right panel's own cap — much larger than the left's, because the graph
- * that lives there benefits from real width the way a file list or backlinks
- * panel never would. It floats with the window rather than a fixed number:
- * whatever's left after the ribbon, the left sidebar (if open), and enough
- * room that the editor is never squeezed away entirely. Never smaller than
- * the ordinary max, so a narrow window behaves exactly as it did before.
+ * How wide a panel may be dragged: everything the window has left after the
+ * ribbon and the *other* panel, and no editor held back — a panel can be
+ * taken to full width, squeezing the editor away entirely, which is the point
+ * of it. The graph is the reason (it reads far better with real room), but
+ * the rule is the same for both panels rather than one having a private one.
+ *
+ * `viewport` is passed in rather than read here so a component can re-derive
+ * this as the window resizes — see uiStore's own `viewport`.
  */
-export function maxRightWidth(leftReserved: number): number {
-  if (typeof window === 'undefined') return MAX_PANEL_WIDTH
-  const available = window.innerWidth - RIBBON_WIDTH - leftReserved - MIN_EDITOR_WIDTH
-  return Math.max(MAX_PANEL_WIDTH, Math.round(available))
+export function maxPanelWidth(otherReserved: number, viewport?: number): number {
+  const width = viewport ?? (typeof window === 'undefined' ? 0 : window.innerWidth)
+  if (!width) return MAX_PANEL_WIDTH
+  return Math.max(MIN_PANEL_WIDTH, Math.round(width - RIBBON_WIDTH - otherReserved))
+}
+
+/**
+ * The width a panel actually renders at: what the user set, held to what the
+ * window can currently show. Kept separate from the stored width on purpose —
+ * shrinking the window narrows the panel for as long as it stays small, and
+ * widening it again gives the panel back the width it was dragged to.
+ */
+export function fittedWidth(width: number, otherReserved: number, viewport: number): number {
+  return Math.min(width, maxPanelWidth(otherReserved, viewport))
 }
 
 /**
@@ -87,6 +98,9 @@ function storedWidth(key: string, fallback: number, max = MAX_PANEL_WIDTH): numb
 type UiState = {
   /** True while the viewport is phone-sized; see MOBILE_BREAKPOINT. */
   mobile: boolean
+  /** The window's own width, watched so a panel dragged wider than a smaller
+   * window can show is fitted back into it — see fittedWidth. */
+  viewport: number
   leftTab: LeftTab
   rightTab: RightTab
   leftOpen: boolean
@@ -124,6 +138,7 @@ type UiState = {
   setChangelogOpen: (open: boolean) => void
   setHelpOpen: (open: boolean) => void
   setMobile: (mobile: boolean) => void
+  setViewport: (width: number) => void
   closePanels: () => void
   setLinkChoice: (choice: LinkChoice) => void
   clearLinkChoice: () => void
@@ -134,33 +149,32 @@ type UiState = {
   setLinkCheckOpen: (open: boolean) => void
 }
 
-// The file tree starts open on a desktop and closed on a phone, where it's a
-// drawer over the editor rather than a column beside it.
+// A cold launch opens the left panel either way, on the tab that layout wants
+// most: the file tree on a desktop, where it is a column beside the editor,
+// and the graph on a phone, where it is a drawer over it and the whole vault
+// at a glance beats a list of file names.
 const startMobile = isMobileWidth()
-const startLeftOpen = !startMobile
+const startLeftTab: LeftTab = startMobile ? 'graph' : 'files'
 const startLeftWidth = storedWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT_WIDTH)
 
 export const useUiStore = create<UiState>((set, get) => ({
   mobile: startMobile,
-  leftTab: 'files',
-  // The graph is the most useful thing to land on: it shows the whole vault
-  // rather than one note's neighbours, and backlinks are one click away.
-  rightTab: 'graph',
-  leftOpen: startLeftOpen,
-  // Unlike the file tree, the graph starts open on a phone too — this is
-  // only the module's *initial* value, so it only ever takes effect on an
-  // actual fresh load (a real cold launch, or a manual refresh, which a web
-  // app cannot tell apart from one). The OS backgrounding and resuming an
-  // already-running PWA never re-runs this module, so whatever the drawer
-  // was showing then is left alone; setMobile's own resize-driven reset
-  // (crossing the breakpoint mid-session) is unaffected too.
-  rightOpen: true,
+  viewport: typeof window === 'undefined' ? 0 : window.innerWidth,
+  leftTab: startLeftTab,
+  rightTab: 'backlinks',
+  // The left drawer opens on a phone too — this is only the module's
+  // *initial* value, so it only ever takes effect on an actual fresh load (a
+  // real cold launch, or a manual refresh, which a web app cannot tell apart
+  // from one). The OS backgrounding and resuming an already-running PWA never
+  // re-runs this module, so whatever the drawer was showing then is left
+  // alone; setMobile's own resize-driven reset (crossing the breakpoint
+  // mid-session) is unaffected too.
+  leftOpen: true,
+  // On a phone the two panels are drawers over the same screen, so only one
+  // of them can start open.
+  rightOpen: !startMobile,
   leftWidth: startLeftWidth,
-  rightWidth: storedWidth(
-    RIGHT_WIDTH_KEY,
-    DEFAULT_RIGHT_WIDTH,
-    maxRightWidth(startLeftOpen ? startLeftWidth : 0),
-  ),
+  rightWidth: storedWidth(RIGHT_WIDTH_KEY, DEFAULT_RIGHT_WIDTH),
   theme: storedTheme(),
   settingsOpen: false,
   changelogOpen: false,
@@ -194,6 +208,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setMobile: (mobile) =>
     set((s) => (s.mobile === mobile ? {} : { mobile, leftOpen: !mobile, rightOpen: !mobile })),
 
+  setViewport: (viewport) => set((s) => (s.viewport === viewport ? {} : { viewport })),
+
   closePanels: () => set({ leftOpen: false, rightOpen: false }),
 
   setLinkChoice: (linkChoice) => set({ linkChoice }),
@@ -206,16 +222,20 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
   setLinkCheckOpen: (linkCheckOpen) => set({ linkCheckOpen }),
 
+  // Both panels are capped by the same rule — everything the window has left
+  // after the ribbon and the other panel — so either can be taken to full
+  // width. The stored value is what the user dragged to; fittedWidth is what
+  // gets rendered if the window is currently too small for it.
   setLeftWidth: (width) => {
-    const leftWidth = clampWidth(width)
+    const s = get()
+    const leftWidth = clampWidth(width, maxPanelWidth(s.rightOpen ? s.rightWidth : 0, s.viewport))
     localStorage.setItem(LEFT_WIDTH_KEY, String(leftWidth))
     set({ leftWidth })
   },
 
   setRightWidth: (width) => {
     const s = get()
-    const max = s.mobile ? MAX_PANEL_WIDTH : maxRightWidth(s.leftOpen ? s.leftWidth : 0)
-    const rightWidth = clampWidth(width, max)
+    const rightWidth = clampWidth(width, maxPanelWidth(s.leftOpen ? s.leftWidth : 0, s.viewport))
     localStorage.setItem(RIGHT_WIDTH_KEY, String(rightWidth))
     set({ rightWidth })
   },

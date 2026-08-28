@@ -4,7 +4,7 @@ A light Obsidian clone, started 2026-08-19. Versioning, git, and deployment
 rules are carried over deliberately from Dodo (`tijamo/Dodo`), so switching
 between the two projects doesn't mean switching habits.
 
-**Current state: v0.15.0.** The app is real and deployed — auth, a Supabase
+**Current state: v0.15.1.** The app is real and deployed — auth, a Supabase
 vault, a three-pane shell, a CodeMirror editor with live-preview wikilinks,
 backlinks, a force-directed graph, tags, full-text search, an installable PWA,
 and an MCP server so Claude can use the vault as its memory. See "Where the
@@ -248,6 +248,22 @@ can read and write the same vault.
   from it, so a user id is never something a caller supplies. That is why every
   MCP operation is its own SQL function rather than a query in TypeScript — the
   narrow door is the security model.
+- **The graph lives in the left panel**, as a fourth tab beside files, search
+  and tags — moved back there in v0.15.1 (it sat in the right sidebar from
+  v0.4). That panel is unmounted when another tab is showing, so `GraphView`
+  keeps node positions and the view transform in a module-level `layoutMemory`
+  and restores them on mount; without it the graph reshuffles every time it is
+  looked at. The simulation's centering forces are re-aimed on every resize
+  too, since the panel's width can now change by a factor of four.
+- **Either panel can be dragged to full width.** `maxPanelWidth` is one rule
+  for both — whatever the window has left after the ribbon and the *other*
+  panel, with nothing held back for the editor, which can be squeezed to
+  nothing on purpose. The width a panel is dragged to is what's stored;
+  `fittedWidth` is what's rendered, so a window later made too small holds the
+  panel in without losing what it was set to, and widening the window gives it
+  back. That needs the window's own width in the store (`uiStore.viewport`,
+  fed by App's resize listener) — a `window.innerWidth` read at render time
+  would not re-run.
 - **Responsive layout** has one breakpoint, 700px, and it is written down
   twice on purpose: `MOBILE_BREAKPOINT` in `uiStore` and the `@media` block at
   the end of `app.css`. Layout is the stylesheet's job — the shell's grid, the
@@ -387,7 +403,7 @@ minor bump.
 | 0.1 | 1 | App shell: ribbon, three panes, status bar, theme tokens. |
 | 0.2 | 1 | The real vault — auth, Supabase notes, the file explorer. |
 | 0.3 | 2 | CodeMirror editor: live-preview wikilinks, `[[` completion, outline. |
-| 0.4 | 3 | Backlinks, graph, tags, search. Then resizable panels, the graph moved to the right sidebar, and the index backfill. |
+| 0.4 | 3 | Backlinks, graph, tags, search. Then resizable panels, the graph moved to the right sidebar (moved back to the left in 0.15.1), and the index backfill. |
 | 0.5 | ? | Installable PWA and the Pitchstone mark. |
 | 0.6 | 6 | The MCP server at `/mcp`, personal tokens, and a settings dialog. |
 | 0.7 | ? | The mobile layout: one pane, drawer sidebars, a bottom ribbon. |
@@ -398,7 +414,7 @@ minor bump.
 | 0.12 | ? | The in-app changelog, and the help/syntax reference. |
 | 0.13 | ? | Registration approval, shared across every Tijamo app. |
 | 0.14 | ? | Vault import/export as a zip of `.md` files, previewed and undoable. |
-| 0.15 | ? | The graph draws nesting by default with wikilinks as a toggle; wikilinks are always coloured; a vault-wide link check that suggests and applies corrections. |
+| 0.15 | ? | The graph draws nesting by default with wikilinks as a toggle; wikilinks are always coloured; a vault-wide link check that suggests and applies corrections. 0.15.1 moved the graph to the left panel, let either panel go full width, and made note labels fade sooner when zooming out. |
 
 **A phase is not a version**, which is what made this confusing: phase 1 —
 "initial data and UI setup" — shipped as both 0.1 and 0.2, so the columns
@@ -462,7 +478,9 @@ Ask rather than guessing, and write the answer down here when you get it.
   owns them and sets them inline.
 - `src/store/` — `uiStore` (tabs, panel widths, theme, the mobile flag),
   `authStore`,
-  `vaultStore` (notes, the open note, autosave, `linksVersion`).
+  `vaultStore` (notes, the open note, autosave, `linksVersion`). Panel widths
+  are the user's, stored per side; `maxPanelWidth`/`fittedWidth` are the one
+  rule that caps them — see Architecture.
 - `src/components/` — the shell (`Ribbon`, `LeftSidebar`, `RightSidebar`,
   `EditorPane`, `StatusBar`, `LoginGate`), the panels (`FileTree`,
   `SearchPanel`, `TagsPanel`, `GraphView`), `SettingsModal`, `LinkCheckModal` (the

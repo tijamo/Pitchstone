@@ -18,6 +18,8 @@ export const changelog: ChangelogEntry[] = [
       'The chain button on the graph lays [[wikilinks]] over the top, and takes them away again; the choice is remembered between sessions. Placeholder circles for links to notes that do not exist come and go with it.',
       'A [[wikilink]] is now always coloured, wherever it sits in a note. In a long one it could previously stay the colour of ordinary text, because the editor had not finished reading that far and never went back. Links to a note that does not exist are dashed, and ones naming more than one note dotted, which they were meant to be all along.',
       "New Check links button at the top of the file list: it reads every link in the vault at once and lists the ones that name no note, or more than one. Each comes with the corrections the vault can suggest — the note it was probably meant to be, or the same name said precisely enough to pick one — and one click rewrites the link in place. Or write the missing note instead, and the link mends itself.",
+      'The graph has moved to the left panel, alongside the file tree, search and tags — and either panel can now be dragged out to the full width of the window when you want to take the whole vault in at once. It settles into whatever room it is given rather than staying where it was, and keeps its layout when you switch tabs and come back.',
+      'Note names now fade out as soon as the graph is zoomed out at all, rather than lingering until it is nearly at its smallest — a crowded vault reads as its shape sooner. Folder names stay, since they are what tells you where you are.',
     ],
   },
   {

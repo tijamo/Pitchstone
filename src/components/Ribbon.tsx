@@ -8,25 +8,20 @@ const TABS: { tab: LeftTab; icon: IconName; label: string }[] = [
   { tab: 'files', icon: 'files', label: 'Files' },
   { tab: 'search', icon: 'search', label: 'Search' },
   { tab: 'tags', icon: 'tag', label: 'Tags' },
+  { tab: 'graph', icon: 'graph', label: 'Graph view' },
 ]
 
 export function Ribbon() {
   const leftTab = useUiStore((s) => s.leftTab)
   const leftOpen = useUiStore((s) => s.leftOpen)
-  const rightTab = useUiStore((s) => s.rightTab)
-  const rightOpen = useUiStore((s) => s.rightOpen)
   const setLeftTab = useUiStore((s) => s.setLeftTab)
-  const setRightTab = useUiStore((s) => s.setRightTab)
   const setSettingsOpen = useUiStore((s) => s.setSettingsOpen)
   const setHelpOpen = useUiStore((s) => s.setHelpOpen)
   const mobile = useUiStore((s) => s.mobile)
   const toggleLeft = useUiStore((s) => s.toggleLeft)
-  const toggleRight = useUiStore((s) => s.toggleRight)
   const create = useVaultStore((s) => s.create)
   const signOut = useAuthStore((s) => s.signOut)
   const pendingCount = useApprovalStore((s) => s.pending.length)
-
-  const graphOpen = rightOpen && rightTab === 'graph'
 
   // On a phone a panel covers the screen, so the button that opened it is the
   // obvious thing to press to put it away again. On a desktop the panel sits
@@ -62,18 +57,6 @@ export function Ribbon() {
           <Icon name={icon} />
         </button>
       ))}
-
-      {/* The graph lives in the right panel, so its ribbon button reaches
-          across to that side rather than switching the left one. */}
-      <button
-        className={`icon-button${graphOpen ? ' icon-button--active' : ''}`}
-        title="Graph view"
-        aria-label="Graph view"
-        aria-pressed={graphOpen}
-        onClick={() => (mobile && graphOpen ? toggleRight() : setRightTab('graph'))}
-      >
-        <Icon name="graph" />
-      </button>
 
       <div className="ribbon__spacer" />
 

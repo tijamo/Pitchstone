@@ -45,6 +45,19 @@ type GraphLink = SimulationLinkDatum<GraphNode> & {
   structural?: boolean
 }
 
+/**
+ * Where every node was, and how the view was panned and zoomed, kept outside
+ * the component. The graph is one tab of a panel rather than a pane of its
+ * own, so switching to the file tree and back unmounts and remounts it — and a
+ * graph that reshuffles itself every time it is looked at is a different graph
+ * each time. Restoring positions also means the simulation resumes at a low
+ * alpha instead of flinging everything apart again.
+ */
+const layoutMemory: {
+  positions: Map<string, { x: number; y: number; vx: number; vy: number }>
+  transform: { x: number; y: number; k: number } | null
+} = { positions: new Map(), transform: null }
+
 /** A link's endpoint, before or after d3 has swapped the id for the node. */
 function endpointId(end: GraphNode | string): string {
   return typeof end === 'string' ? end : end.id
@@ -53,6 +66,15 @@ function endpointId(end: GraphNode | string): string {
 const FONT = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 3
+/**
+ * Where a note's label is at full strength, and where it has gone entirely.
+ * The gap between them is deliberately short and sits just under the default
+ * zoom: pulling back even a little is a request to see the *shape* of the
+ * vault, and labels are what stops that shape being legible. Folder labels
+ * are exempt — see draw().
+ */
+const LABEL_FADE_FULL = 1
+const LABEL_FADE_GONE = 0.7
 /** How long the pointer has to sit still on a node before its path shows. */
 const HOVER_DELAY = 500
 /** How long a touch has to hold still on a node before it starts dragging it
@@ -242,7 +264,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   const nodesRef = useRef<GraphNode[]>([])
   const linksRef = useRef<GraphLink[]>([])
   const sizeRef = useRef({ width: 0, height: 0 })
-  const transformRef = useRef({ x: 0, y: 0, k: 1 })
+  const transformRef = useRef(layoutMemory.transform ?? { x: 0, y: 0, k: 1 })
   const dragRef = useRef<{ node: GraphNode; moved: boolean } | null>(null)
   const panRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null)
   // A touch that landed on a node but hasn't yet been classified as a tap, a
@@ -364,13 +386,18 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       // Rounded to a step so a drag-resize reuses cache entries instead of
       // measuring every title afresh at every intermediate pixel width.
       const maxLabel = Math.max(60, Math.round((width * 0.4) / 20) * 20)
-      // A note's label fades out below the graph's default zoom, so a
-      // zoomed-out, crowded vault reads as nodes and edges rather than a wall
-      // of overlapping text — 1 at the default zoom and above, down to fully
-      // gone at MIN_ZOOM. Folders are exempt: there are far fewer of them,
-      // they don't crowd the way note labels do, and they're what orients a
-      // zoomed-out view in the first place.
-      const labelZoomFade = Math.min(1, Math.max(0, (transformRef.current.k - MIN_ZOOM) / (1 - MIN_ZOOM)))
+      // A note's label fades out as soon as the view pulls back from its
+      // default zoom, so a zoomed-out, crowded vault reads as nodes and edges
+      // rather than a wall of overlapping text. Folders are exempt: there are
+      // far fewer of them, they don't crowd the way note labels do, and
+      // they're what orients a zoomed-out view in the first place.
+      const labelZoomFade = Math.min(
+        1,
+        Math.max(
+          0,
+          (transformRef.current.k - LABEL_FADE_GONE) / (LABEL_FADE_FULL - LABEL_FADE_GONE),
+        ),
+      )
       for (const node of nodesRef.current) {
         if (node.x == null || node.y == null) continue
         const p = project(node.x, node.y)
@@ -422,9 +449,25 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       ctx!.globalAlpha = 1
     }
 
+    /** The centering forces, which every layout and every resize re-aims at
+     * the middle of whatever room the panel currently has. */
+    function centerForces(sim: Simulation<GraphNode, GraphLink>, width: number, height: number) {
+      sim
+        .force('center', forceCenter(width / 2, height / 2))
+        // Nesting alone leaves the vault a forest, not one graph — each
+        // top-level folder is its own component, and nothing but repulsion
+        // acts between them, so without a gentle pull towards the middle
+        // they drift off the canvas and leave the panel looking empty.
+        // Weak enough that it never fights the link distances inside a
+        // component; strong enough that the components stay in the frame.
+        .force('x', forceX<GraphNode>(width / 2).strength(0.04))
+        .force('y', forceY<GraphNode>(height / 2).strength(0.04))
+    }
+
     function resize() {
       const width = container!.clientWidth
       const height = container!.clientHeight
+      const grew = width !== sizeRef.current.width || height !== sizeRef.current.height
       sizeRef.current = { width, height }
       const dpr = window.devicePixelRatio || 1
       canvas!.width = width * dpr
@@ -432,6 +475,16 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       canvas!.style.width = `${width}px`
       canvas!.style.height = `${height}px`
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0)
+      // The panel is resizable and can now be taken to the full width of the
+      // window, so the middle of the canvas moves — a lot. Left alone, the
+      // simulation keeps pulling towards wherever the middle used to be and
+      // the graph sits in a corner of its new room. Re-aiming the forces and
+      // nudging the simulation lets it spread into the space instead; the
+      // alpha is low enough to read as settling rather than reshuffling.
+      if (grew && simRef.current && nodesRef.current.length > 0) {
+        centerForces(simRef.current, width, height)
+        simRef.current.alpha(Math.max(simRef.current.alpha(), 0.12)).restart()
+      }
       draw()
     }
 
@@ -494,19 +547,10 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
             // it gets more room rather than crowding notes into their folder.
             .distance((l) => (l.structural ? 70 : 56)),
         )
-        .force('center', forceCenter(width / 2, height / 2))
-        // Nesting alone leaves the vault a forest, not one graph — each
-        // top-level folder is its own component, and nothing but repulsion
-        // acts between them, so without a gentle pull towards the middle
-        // they drift off the canvas and leave the panel looking empty.
-        // Weak enough that it never fights the link distances inside a
-        // component; strong enough that the components stay in the frame.
-        .force('x', forceX<GraphNode>(width / 2).strength(0.04))
-        .force('y', forceY<GraphNode>(height / 2).strength(0.04))
         .force('collide', forceCollide<GraphNode>((d) => radiusOf(d) + 6))
         .on('tick', draw)
-        .alpha(alpha)
-        .restart()
+      centerForces(simRef.current, width, height)
+      simRef.current.alpha(alpha).restart()
 
       resize()
     }
@@ -620,7 +664,9 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
       const previous = new Map(nodesRef.current.map((n) => [n.id, n]))
       let carried = 0
       for (const node of nodes) {
-        const old = previous.get(node.id)
+        // Whatever is already on screen wins; layoutMemory covers the first
+        // fetch after a remount, when nothing is.
+        const old = previous.get(node.id) ?? layoutMemory.positions.get(node.id)
         if (!old || old.x == null) continue
         node.x = old.x
         node.y = old.y
@@ -961,6 +1007,13 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
 
     return () => {
       cancelled = true
+      // Hand the layout on to the next mount — see layoutMemory.
+      layoutMemory.positions = new Map(
+        allNodesRef.current
+          .filter((n) => n.x != null && n.y != null)
+          .map((n) => [n.id, { x: n.x!, y: n.y!, vx: n.vx ?? 0, vy: n.vy ?? 0 }]),
+      )
+      layoutMemory.transform = { ...transformRef.current }
       resizeObserver.disconnect()
       simRef.current?.stop()
       clearHover()

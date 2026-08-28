@@ -3,9 +3,8 @@ import {
   useUiStore,
   DEFAULT_LEFT_WIDTH,
   DEFAULT_RIGHT_WIDTH,
-  MAX_PANEL_WIDTH,
   MIN_PANEL_WIDTH,
-  maxRightWidth,
+  maxPanelWidth,
 } from '../store/uiStore'
 
 /** How much one arrow-key press moves the edge. */
@@ -22,11 +21,15 @@ const KEY_STEP = 16
 export function Resizer({ side }: { side: 'left' | 'right' }) {
   const width = useUiStore((s) => (side === 'left' ? s.leftWidth : s.rightWidth))
   const setWidth = useUiStore((s) => (side === 'left' ? s.setLeftWidth : s.setRightWidth))
-  // The right panel's own cap floats with the window and the left sidebar's
-  // width — see maxRightWidth. Only its aria value needs it; the store's own
-  // setRightWidth re-derives and enforces the real max on every drag.
-  const leftReserved = useUiStore((s) => (s.leftOpen ? s.leftWidth : 0))
-  const max = side === 'left' ? MAX_PANEL_WIDTH : maxRightWidth(leftReserved)
+  // Either panel may be dragged out to whatever the window has left after the
+  // ribbon and the other one — full width, if that is what is wanted. Only the
+  // aria value needs this here; the store re-derives and enforces the real max
+  // on every drag.
+  const viewport = useUiStore((s) => s.viewport)
+  const otherReserved = useUiStore((s) =>
+    side === 'left' ? (s.rightOpen ? s.rightWidth : 0) : s.leftOpen ? s.leftWidth : 0,
+  )
+  const max = maxPanelWidth(otherReserved, viewport)
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null)
   const [dragging, setDragging] = useState(false)
 
