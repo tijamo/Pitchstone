@@ -5,6 +5,8 @@ import {
   forceLink,
   forceManyBody,
   forceSimulation,
+  forceX,
+  forceY,
   type Simulation,
   type SimulationLinkDatum,
   type SimulationNodeDatum,
@@ -14,7 +16,7 @@ import { useUiStore } from '../store/uiStore'
 import { listLinks } from '../lib/notes'
 import type { NoteMeta } from '../lib/notes'
 import { matchNotesByTarget } from '../lib/markdown/resolve'
-import { basename, dirname, folderGraphId, folderNotePath } from '../lib/paths'
+import { basename, dirname, folderGraphId, folderNotePath, resolveParents } from '../lib/paths'
 import { Icon } from './Icon'
 
 type GraphNode = SimulationNodeDatum & {
@@ -36,9 +38,16 @@ type GraphNode = SimulationNodeDatum & {
   noteId?: string
 }
 type GraphLink = SimulationLinkDatum<GraphNode> & {
-  /** A note-in-folder or folder-in-folder edge, not a [[wikilink]] — drawn
-   * dashed so containment reads differently from an actual link. */
+  /** A nesting edge — a note under its parent note, a note in its folder, a
+   * folder in its folder — rather than a [[wikilink]]. This is what the graph
+   * always shows; wikilinks are the layer over the top that can be turned
+   * off, and are drawn solid so the two read differently when both are on. */
   structural?: boolean
+}
+
+/** A link's endpoint, before or after d3 has swapped the id for the node. */
+function endpointId(end: GraphNode | string): string {
+  return typeof end === 'string' ? end : end.id
 }
 
 const FONT = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
@@ -86,11 +95,17 @@ function fitLabel(
 /**
  * The focused view rooted at `rootId`. For a note (or an unresolved/ambiguous
  * placeholder), it's a spanning tree radiating outward with no cross-links
- * between branches — found by a plain BFS over the link graph, where the
- * first edge to reach a node is the only one kept, so two branches that both
- * lead to the same note never draw a connecting edge between them. Folder
- * containment plays no part here: it groups notes by where they live, not by
- * what they mean to each other, so it isn't a "branch" in this sense.
+ * between branches — found by a plain BFS over the graph, where the first
+ * edge to reach a node is the only one kept, so two branches that both lead
+ * to the same note never draw a connecting edge between them.
+ *
+ * Which edges it walks follows what the graph is currently *about*, which is
+ * what `wikilinks` says: with wikilinks shown, a branch means a chain of
+ * links, and nesting is dropped — it groups notes by where they live, not by
+ * what they mean to each other. With them off, nesting is the only relation
+ * on screen, so a branch means the tree of notes and folders around this one
+ * instead. Following both at once would mix the two readings and pull in
+ * every folder-mate of every linked note.
  *
  * For a folder, it's a different shape on purpose: every node shown has to
  * belong to that project, so containment (recursive, through sub-folders) is
@@ -105,9 +120,10 @@ function buildFocusTree(
   nodes: GraphNode[],
   links: GraphLink[],
   rootId: string,
+  wikilinks: boolean,
 ): { nodes: GraphNode[]; links: GraphLink[] } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
-  const idOf = (end: GraphNode | string) => (typeof end === 'string' ? end : end.id)
+  const idOf = endpointId
 
   if (byId.get(rootId)?.folder) {
     // A containment edge points child -> its folder (see the note/folder
@@ -148,7 +164,7 @@ function buildFocusTree(
 
   const adjacency = new Map<string, { link: GraphLink; otherId: string }[]>()
   for (const link of links) {
-    if (link.structural) continue
+    if (Boolean(link.structural) === wikilinks) continue
     const s = idOf(link.source as GraphNode | string)
     const t = idOf(link.target as GraphNode | string)
     if (!adjacency.has(s)) adjacency.set(s, [])
@@ -198,6 +214,8 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   const graphFocus = useUiStore((s) => s.graphFocus)
   const graphFocusId = useUiStore((s) => s.graphFocusId)
   const setGraphFocus = useUiStore((s) => s.setGraphFocus)
+  const graphLinks = useUiStore((s) => s.graphLinks)
+  const setGraphLinks = useUiStore((s) => s.setGraphLinks)
 
   // Which node the focused view is rooted at, only while focus mode is on.
   // graphFocusId is an explicit choice — set by double-clicking a node here,
@@ -213,6 +231,8 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   activeIdRef.current = activeId
   const focusRootRef = useRef(focusRoot)
   focusRootRef.current = focusRoot
+  const graphLinksRef = useRef(graphLinks)
+  graphLinksRef.current = graphLinks
 
   // The full graph, as fetched — nodesRef/linksRef below are what's actually
   // laid out and drawn, which is this filtered down to the focus tree when
@@ -420,17 +440,40 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     // and (re)starts the simulation. Called after every fetch, and by the
     // separate focus-only effect below when just the root changes.
     function applyLayout(alpha = 1) {
-      const all = allNodesRef.current
-      if (all.length === 0) return
+      if (allNodesRef.current.length === 0) return
 
       // Node membership and positions are both about to change under it.
       clearHover()
 
+      // Nesting is always drawn; wikilinks are the layer over the top. With
+      // that layer off, the placeholder nodes go with it — an unwritten or
+      // ambiguous title is only ever on the graph because a link names it,
+      // so leaving it behind would strand it with no edge at all.
+      const wikilinks = graphLinksRef.current
+      const all = wikilinks
+        ? allNodesRef.current
+        : allNodesRef.current.filter((n) => !n.unresolved)
+      const allLinks = wikilinks
+        ? allLinksRef.current
+        : allLinksRef.current.filter((l) => l.structural)
+
+      // A node's size is how connected it is *on screen*: counting links that
+      // aren't being drawn would size a note by a relationship the graph is
+      // not currently showing.
+      const degree = new Map<string, number>()
+      for (const link of allLinks) {
+        const s = endpointId(link.source as GraphNode | string)
+        const t = endpointId(link.target as GraphNode | string)
+        degree.set(s, (degree.get(s) ?? 0) + 1)
+        degree.set(t, (degree.get(t) ?? 0) + 1)
+      }
+      for (const node of all) node.degree = degree.get(node.id) ?? 0
+
       const root = focusRootRef.current
       const rootNode = root ? all.find((n) => n.id === root) : undefined
       const { nodes: simNodes, links: simLinks } = rootNode
-        ? buildFocusTree(all, allLinksRef.current, rootNode.id)
-        : { nodes: all, links: allLinksRef.current }
+        ? buildFocusTree(all, allLinks, rootNode.id, wikilinks)
+        : { nodes: all, links: allLinks }
 
       nodesRef.current = simNodes
       linksRef.current = simLinks
@@ -452,6 +495,14 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
             .distance((l) => (l.structural ? 70 : 56)),
         )
         .force('center', forceCenter(width / 2, height / 2))
+        // Nesting alone leaves the vault a forest, not one graph — each
+        // top-level folder is its own component, and nothing but repulsion
+        // acts between them, so without a gentle pull towards the middle
+        // they drift off the canvas and leave the panel looking empty.
+        // Weak enough that it never fights the link distances inside a
+        // component; strong enough that the components stay in the frame.
+        .force('x', forceX<GraphNode>(width / 2).strength(0.04))
+        .force('y', forceY<GraphNode>(height / 2).strength(0.04))
         .force('collide', forceCollide<GraphNode>((d) => radiusOf(d) + 6))
         .on('tick', draw)
         .alpha(alpha)
@@ -486,16 +537,12 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         // nothing and names nothing useful; drop it rather than plot it.
         .filter((e) => !e.resolved || byNoteId.has(e.to))
 
-      const degree = new Map<string, number>()
-      for (const e of endpoints) {
-        degree.set(e.from, (degree.get(e.from) ?? 0) + 1)
-        degree.set(e.to, (degree.get(e.to) ?? 0) + 1)
-      }
-
+      // Degree is counted in applyLayout instead of here, over whichever
+      // edges are actually being drawn — see its own note.
       const nodes: GraphNode[] = notes.map((n) => ({
         id: n.id,
         title: n.title,
-        degree: degree.get(n.id) ?? 0,
+        degree: 0,
         unresolved: false,
         ambiguous: false,
         folder: false,
@@ -508,7 +555,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         nodes.push({
           id: e.to,
           title: e.title,
-          degree: degree.get(e.to) ?? 0,
+          degree: 0,
           unresolved: true,
           // A name more than one note answers to needs qualifying, not
           // creating — the placeholder is not "unwritten" the way a genuinely
@@ -520,12 +567,17 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
 
       const links: GraphLink[] = endpoints.map((e) => ({ source: e.from, target: e.to }))
 
-      // The vault's folders are never stored (paths.ts), so they are rebuilt
-      // here from note paths on every layout: one pseudo-node per folder, an
-      // edge from each note to the folder it sits in, and from each folder to
-      // its own parent. That gives notes with no [[wikilink]] between them —
-      // most of what sits under Memory/Projects/<Project>/, for instance — a
-      // reason to sit near each other on the graph anyway.
+      // Nesting — the relation the graph always draws. It is exactly what the
+      // file explorer shows, and for the same reason it has to be built the
+      // same way: a note naming another in its `parent` frontmatter nests
+      // under *that note*, and everything else nests in the folder its path
+      // puts it in. The vault's folders are never stored (paths.ts), so they
+      // are rebuilt here on every layout: one pseudo-node per folder, an edge
+      // from each note to whatever it nests under, and from each folder to
+      // its own parent folder. That gives notes with no [[wikilink]] between
+      // them — most of what sits under Memory/Projects/<Project>/, for
+      // instance — a reason to sit near each other anyway.
+      const parentOf = resolveParents(notes, matchNotesByTarget)
       const folderNodes = new Map<string, GraphNode>()
       function ensureFolder(path: string): GraphNode {
         const existing = folderNodes.get(path)
@@ -548,22 +600,20 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
         return created
       }
       for (const note of notes) {
+        // A note that nests under another one is not in its folder any more,
+        // exactly as the file tree moves it out — and a folder left holding
+        // nothing that way is never asked for, so it stops existing, which is
+        // what buildTree's own pruneEmptyFolders does.
+        const parent = parentOf.get(note)
+        if (parent) {
+          links.push({ source: note.id, target: parent.id, structural: true })
+          continue
+        }
         const dir = dirname(note.path)
         if (!dir) continue
         links.push({ source: note.id, target: ensureFolder(dir).id, structural: true })
       }
-      const folderDegree = new Map<string, number>()
-      for (const link of links) {
-        if (!link.structural) continue
-        const from = link.source as string
-        const to = link.target as string
-        folderDegree.set(from, (folderDegree.get(from) ?? 0) + 1)
-        folderDegree.set(to, (folderDegree.get(to) ?? 0) + 1)
-      }
-      for (const node of folderNodes.values()) {
-        node.degree = folderDegree.get(node.id) ?? 0
-        nodes.push(node)
-      }
+      for (const node of folderNodes.values()) nodes.push(node)
 
       // Carry positions over from the previous layout so a refresh — a save
       // that changed one link — nudges the graph rather than reshuffling it.
@@ -938,10 +988,26 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
     applyLayoutRef.current?.()
   }, [focusRoot])
 
+  // Turning wikilinks on or off is the same kind of change: the same fetched
+  // graph, filtered differently.
+  useEffect(() => {
+    applyLayoutRef.current?.()
+  }, [graphLinks])
+
   return (
     <div ref={containerRef} className="graph-view">
       <canvas ref={canvasRef} className="graph-view__canvas" />
       <div className="graph-view__toolbar">
+        <button
+          type="button"
+          className={`icon-button${graphLinks ? ' icon-button--active' : ''}`}
+          title={graphLinks ? 'Hide wikilinks' : 'Show wikilinks'}
+          aria-label={graphLinks ? 'Hide wikilinks' : 'Show wikilinks'}
+          aria-pressed={graphLinks}
+          onClick={() => setGraphLinks(!graphLinks)}
+        >
+          <Icon name="links" />
+        </button>
         <button
           type="button"
           className={`icon-button${graphFocus ? ' icon-button--active' : ''}`}

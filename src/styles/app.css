@@ -456,6 +456,11 @@ button {
   padding-left: 2px;
 }
 
+.sidebar__header-actions {
+  display: flex;
+  gap: 2px;
+}
+
 /* ---------- File tree ---------- */
 
 .tree,
@@ -845,6 +850,8 @@ button {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  gap: 4px;
 }
 
 .graph-view__toolbar .icon-button {
@@ -1302,6 +1309,105 @@ button {
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ---------- Link check ---------- */
+
+.link-check__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.link-check__summary .modal__note {
+  margin: 0;
+}
+
+.link-check__summary .gate__ghost {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.link-check__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.link-check__source {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-normal);
+  font-family: inherit;
+  font-size: var(--font-size-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+.link-check__source:hover {
+  color: var(--link);
+}
+
+.link-check__dir {
+  color: var(--text-faint);
+}
+
+/* The link on one line and what can be done about it on the next, always —
+   letting the two share a line when they happen to fit made every row in the
+   list sit differently from the one above it. */
+.link-check__issue {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding-left: 12px;
+}
+
+.link-check__what {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Coloured exactly as the same link reads in the editor: dashed and warm for
+   a note that does not exist, dotted and amber for a name more than one note
+   answers to. The fix is different, so the two never look alike. */
+.link-check__target {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-raised);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.link-check__target--unresolved {
+  color: var(--link-unresolved);
+}
+
+.link-check__target--ambiguous {
+  color: var(--link-ambiguous);
+}
+
+.link-check__why {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.link-check__fixes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.link-check__fix {
+  padding: 3px 8px;
+  font-size: 11px;
 }
 
 /* ---------- Mobile ---------- */

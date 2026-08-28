@@ -9,6 +9,7 @@ import { ApprovalGate } from './components/ApprovalGate'
 import { SettingsModal } from './components/SettingsModal'
 import { ChangelogModal } from './components/ChangelogModal'
 import { HelpModal } from './components/HelpModal'
+import { LinkCheckModal } from './components/LinkCheckModal'
 import { LinkChoice } from './components/LinkChoice'
 import { useUiStore, MOBILE_BREAKPOINT } from './store/uiStore'
 import { POLL_MS, watchVault } from './lib/live'
@@ -131,6 +132,7 @@ function Vault() {
       <SettingsModal />
       <ChangelogModal />
       <HelpModal />
+      <LinkCheckModal />
       <LinkChoice />
       {error && (
         <div className="toast" role="alert">

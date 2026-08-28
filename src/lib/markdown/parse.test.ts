@@ -6,6 +6,7 @@ import {
   extractLinks,
   extractTags,
   parseFrontmatter,
+  replaceLinkTarget,
 } from './parse.ts'
 
 describe('extractLinks', () => {
@@ -121,5 +122,34 @@ describe('collectTags', () => {
 
   it('does not double-count a tag in both places', () => {
     assert.deepEqual(collectTags('---\ntags: [alpha]\n---\n#alpha again'), ['alpha'])
+  })
+})
+
+describe('replaceLinkTarget', () => {
+  it('retargets a plain link', () => {
+    assert.equal(replaceLinkTarget('see [[Wellcome]] first', 'Wellcome', 'Welcome'), 'see [[Welcome]] first')
+  })
+
+  it('keeps the alias and the embed marker', () => {
+    assert.equal(
+      replaceLinkTarget('![[old|shown]]', 'old', 'Folder/new'),
+      '![[Folder/new|shown]]',
+    )
+  })
+
+  it('retargets every occurrence, whatever their case', () => {
+    assert.equal(
+      replaceLinkTarget('[[gotchas]] and [[Gotchas|them]]', 'gotchas', 'Dodo/gotchas'),
+      '[[Dodo/gotchas]] and [[Dodo/gotchas|them]]',
+    )
+  })
+
+  it('leaves every other link alone, including one that merely starts the same', () => {
+    const content = '[[Welcome]] [[old]] [[older]]'
+    assert.equal(replaceLinkTarget(content, 'old', 'new'), '[[Welcome]] [[new]] [[older]]')
+  })
+
+  it('returns the note unchanged when nothing matches', () => {
+    assert.equal(replaceLinkTarget('[[Welcome]]', 'missing', 'new'), '[[Welcome]]')
   })
 })

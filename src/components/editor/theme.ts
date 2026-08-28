@@ -54,16 +54,23 @@ export const editorTheme = EditorView.theme({
     cursor: 'pointer',
     textDecoration: 'none',
   },
-  '.cm-wikilink:hover': { textDecoration: 'underline' },
+  // The line, not the shorthand: `textDecoration: 'underline'` would reset
+  // the dashed/dotted style the two states below set, so hovering an
+  // unresolved link would quietly turn it into a resolved-looking one.
+  '.cm-wikilink:hover': { textDecorationLine: 'underline' },
   '.cm-wikilink--unresolved': {
     color: 'var(--link-unresolved)',
+    textDecorationLine: 'underline',
     textDecorationStyle: 'dashed',
+    textUnderlineOffset: '3px',
   },
   // More than one note answers to this title — distinct from unresolved
   // (dashed) because the fix is to qualify the link, not to write a note.
   '.cm-wikilink--ambiguous': {
     color: 'var(--link-ambiguous)',
+    textDecorationLine: 'underline',
     textDecorationStyle: 'dotted',
+    textUnderlineOffset: '3px',
   },
 
   '.cm-tooltip': {

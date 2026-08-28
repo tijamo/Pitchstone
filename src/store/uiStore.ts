@@ -13,6 +13,7 @@ export type Theme = 'dark' | 'light'
 export type LinkChoice = { x: number; y: number; target: string; matches: NoteMeta[] }
 
 const THEME_KEY = 'pitchstone:theme'
+const GRAPH_LINKS_KEY = 'pitchstone:graphLinks'
 const LEFT_WIDTH_KEY = 'pitchstone:leftWidth'
 const RIGHT_WIDTH_KEY = 'pitchstone:rightWidth'
 
@@ -62,6 +63,17 @@ export function maxRightWidth(leftReserved: number): number {
   return Math.max(MAX_PANEL_WIDTH, Math.round(available))
 }
 
+/**
+ * Whether the graph draws [[wikilink]] edges on top of the nesting it always
+ * shows. Off by default — the graph's standing job is to show how the vault
+ * is *organised*, which is nesting, and links are a second, denser reading of
+ * it laid over the top. Remembered between sessions like the panel widths,
+ * since it's a way of looking rather than a one-off.
+ */
+function storedGraphLinks(): boolean {
+  return localStorage.getItem(GRAPH_LINKS_KEY) === 'true'
+}
+
 function storedTheme(): Theme | null {
   const value = localStorage.getItem(THEME_KEY)
   return value === 'dark' || value === 'light' ? value : null
@@ -97,6 +109,10 @@ type UiState = {
    * "active" — this is the only way to point the graph at one of those.
    */
   graphFocusId: string | null
+  /** Graph draws [[wikilink]] edges as well as the nesting it always shows. */
+  graphLinks: boolean
+  /** The broken-link review, over every note in the vault. */
+  linkCheckOpen: boolean
   setLeftTab: (tab: LeftTab) => void
   setRightTab: (tab: RightTab) => void
   toggleLeft: () => void
@@ -114,6 +130,8 @@ type UiState = {
   setGraphFocus: (focus: boolean) => void
   /** Focus the graph on a specific node id and turn focus mode on. */
   focusGraph: (id: string) => void
+  setGraphLinks: (show: boolean) => void
+  setLinkCheckOpen: (open: boolean) => void
 }
 
 // The file tree starts open on a desktop and closed on a phone, where it's a
@@ -150,6 +168,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   linkChoice: null,
   graphFocus: false,
   graphFocusId: null,
+  graphLinks: storedGraphLinks(),
+  linkCheckOpen: false,
 
   // Selecting a tab also reveals the sidebar if it was collapsed, so the ribbon
   // buttons always do something visible. On a phone the two panels are drawers
@@ -180,6 +200,11 @@ export const useUiStore = create<UiState>((set, get) => ({
   clearLinkChoice: () => set({ linkChoice: null }),
   setGraphFocus: (graphFocus) => set({ graphFocus }),
   focusGraph: (id) => set({ graphFocus: true, graphFocusId: id }),
+  setGraphLinks: (graphLinks) => {
+    localStorage.setItem(GRAPH_LINKS_KEY, String(graphLinks))
+    set({ graphLinks })
+  },
+  setLinkCheckOpen: (linkCheckOpen) => set({ linkCheckOpen }),
 
   setLeftWidth: (width) => {
     const leftWidth = clampWidth(width)

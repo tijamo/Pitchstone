@@ -24,6 +24,7 @@ import { dirname, joinPath, sanitizeSegment, toPath, uniquePath } from '../lib/p
  */
 export const DEFAULT_NOTE_FOLDER = 'Memory/Notes'
 import { matchNotesByTarget } from '../lib/markdown/resolve'
+import { replaceLinkTarget } from '../lib/markdown/parse'
 
 export type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
 
@@ -106,8 +107,9 @@ type VaultState = {
   edit: (content: string) => void
   flush: () => Promise<void>
   create: (dir?: string, name?: string) => Promise<string | null>
-  openOrCreate: (title: string) => Promise<void>
+  openOrCreate: (title: string, nearNoteId?: string) => Promise<void>
   rename: (id: string, input: string) => Promise<void>
+  retargetLink: (noteId: string, from: string, to: string) => Promise<boolean>
   remove: (id: string) => Promise<void>
   setRenaming: (id: string | null) => void
   dismissError: () => void
@@ -259,7 +261,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   // chooser instead, since only they know where to anchor it. This still
   // guards against being reached with more than one match some other way, by
   // doing nothing rather than guessing.
-  openOrCreate: async (target) => {
+  openOrCreate: async (target, nearNoteId) => {
     const state = get()
     const matches = matchNotesByTarget(state.notes, target)
     if (matches.length > 1) return
@@ -270,7 +272,9 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
     // Nothing matches. A folder-qualified target ("Projects/New") creates the
     // note at that literal path; a bare name creates it alongside whichever
-    // note is open, the way following a plain [[link]] always has.
+    // note is open, the way following a plain [[link]] always has —
+    // or alongside `nearNoteId` when the caller knows better, which the link
+    // review does: the link it is mending is in a note that may not be open.
     const trimmed = target.trim()
     if (trimmed.includes('/')) {
       const segments = trimmed.split('/')
@@ -278,8 +282,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       await state.create(segments.join('/'), name)
       return
     }
-    const active = state.notes.find((n) => n.id === state.activeId)
-    await state.create(active ? dirname(active.path) : DEFAULT_NOTE_FOLDER, trimmed)
+    const anchor = state.notes.find((n) => n.id === (nearNoteId ?? state.activeId))
+    await state.create(anchor ? dirname(anchor.path) : DEFAULT_NOTE_FOLDER, trimmed)
   },
 
   rename: async (id, input) => {
@@ -302,6 +306,47 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       }))
     } catch (error) {
       set({ error: describeError(error) })
+    }
+  },
+
+  /**
+   * Point every `[[link]]` in one note at a different target — the link
+   * review's own fix, and the only edit the app makes to a note nobody has
+   * open. It goes through the ordinary save path so the note's tags, links,
+   * and frontmatter are re-derived exactly as they would be by typing it.
+   *
+   * The open note is a special case twice over: its unsaved edits are landed
+   * first, so the fix is applied to what is on screen rather than to an older
+   * copy of it, and the corrected text is put back into the editor
+   * afterwards. A note whose server copy has changed under unsaved edits is
+   * left alone entirely — that conflict is already a question being asked,
+   * and this would answer it by writing over one side.
+   */
+  retargetLink: async (noteId, from, to) => {
+    const state = get()
+    const open = state.activeId === noteId
+    if (open && state.openNoteStale) return false
+
+    try {
+      if (open) await get().flush()
+      const before = open ? get().content : (await fetchNote(noteId)).content
+      const after = replaceLinkTarget(before, from, to)
+      if (after === before) return false
+
+      const saved = await saveContent(noteId, after)
+      if (open) openedAt = saved.updated_at
+      set((s2) => ({
+        notes: s2.notes.map((n) => (n.id === saved.id ? { ...n, ...saved } : n)),
+        // The save rewrote this note's links, which no note id reflects.
+        linksVersion: s2.linksVersion + 1,
+        ...(open
+          ? { content: after, contentVersion: s2.contentVersion + 1, saveStatus: 'saved' as SaveStatus }
+          : {}),
+      }))
+      return true
+    } catch (error) {
+      set({ error: describeError(error) })
+      return false
     }
   },
 

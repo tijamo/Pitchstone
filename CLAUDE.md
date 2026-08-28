@@ -4,7 +4,7 @@ A light Obsidian clone, started 2026-08-19. Versioning, git, and deployment
 rules are carried over deliberately from Dodo (`tijamo/Dodo`), so switching
 between the two projects doesn't mean switching habits.
 
-**Current state: v0.6.0.** The app is real and deployed — auth, a Supabase
+**Current state: v0.15.0.** The app is real and deployed — auth, a Supabase
 vault, a three-pane shell, a CodeMirror editor with live-preview wikilinks,
 backlinks, a force-directed graph, tags, full-text search, an installable PWA,
 and an MCP server so Claude can use the vault as its memory. See "Where the
@@ -279,6 +279,23 @@ can read and write the same vault.
   twice" shape as wikilink extraction above, and needs the same discipline**:
   change the matching rule in one and the other silently disagrees about what
   a link means.
+- **The graph is about nesting first, links second.** Nesting — a note in its
+  folder, a folder in its folder, and a note under whatever note its `parent`
+  frontmatter names — is drawn always, dashed; `[[wikilinks]]` are a layer over
+  the top that a toolbar toggle adds and removes (`uiStore.graphLinks`,
+  remembered in `localStorage`), and the unresolved/ambiguous placeholder nodes
+  come and go with it, since a link is the only reason they are on the graph at
+  all. Both edge kinds are fetched once and *filtered* in `applyLayout`, never
+  refetched, and node degree is recounted there over whatever is actually being
+  drawn. `buildFocusTree` follows the same idea: with links shown a branch means
+  a chain of links, with them hidden it means the nesting around a note —
+  following both at once mixes the two readings. Because nesting alone leaves
+  the vault a *forest* rather than one graph, the simulation also carries weak
+  `forceX`/`forceY` centering; without it the components drift off the canvas.
+- **Nesting has one rule, `paths.ts`'s `resolveParents`**, used by the file
+  tree and the graph alike — a `parent` that names more than one note, no note,
+  itself, or a cycle is dropped, and the note stays where its path puts it.
+  Same discipline as the two link parsers: change it in one place only.
 - **An ambiguous link is a third state, not a fallback to unresolved.** The
   editor colors a `[[link]]` three ways — resolved (`.cm-wikilink`), unresolved
   (`--unresolved`, dashed, a note not yet written), ambiguous (`--ambiguous`,
@@ -331,6 +348,20 @@ can read and write the same vault.
   `lastImport`, and `undoLastImport` deletes exactly that set — not a
   snapshot restore, since nothing was ever overwritten to restore *to*. A
   second import replaces the undo record rather than merging with it.
+- **A broken link is reviewed vault-wide, and mended in place.**
+  `lib/linkCheck.ts` takes the note list and the link table and returns every
+  link that names no note or more than one, with suggestions: for an ambiguous
+  one the exact qualified forms, for a broken one the near-misses by title
+  similarity (normalized Levenshtein, so `[[Deploymnet]]` offers
+  `[[Deployment]]`). It resolves nothing itself — matching and qualifying are
+  passed in, the way `paths.ts` takes `matchByTarget`, so it has no relative
+  imports and the tests run it under Node's type stripping. `target_note_id`
+  is *not* what decides: it is only rewritten when a note is created, renamed,
+  or deleted, so the check re-decides with `matchNotesByTarget` and drops rows
+  that resolve today. `LinkCheckModal` fixes one through
+  `vaultStore.retargetLink`, which goes through the ordinary save path (so tags
+  and links are re-derived), flushes and reloads the editor when the note is
+  the open one, and refuses while `openNoteStale` is set.
 - **A folder can be a note, by the same convention Obsidian's "Folder Notes"
   plugin uses.** `paths.ts`'s `folderNotePath(folder)` names the note at
   `<folder>/<folder-name>.md`; `buildTree` recognizes one and attaches it to
@@ -362,6 +393,12 @@ minor bump.
 | 0.7 | ? | The mobile layout: one pane, drawer sidebars, a bottom ribbon. |
 | 0.8 | ? | Live updates: the app follows the vault, whoever changed it. |
 | 0.9 | ? | Disambiguation: duplicate titles resolve by folder, not by guessing. |
+| 0.10 | ? | Graph focus mode: a branching tree rooted at a note, folder, or unresolved link. |
+| 0.11 | ? | Notes nest under other notes via `parent` frontmatter. |
+| 0.12 | ? | The in-app changelog, and the help/syntax reference. |
+| 0.13 | ? | Registration approval, shared across every Tijamo app. |
+| 0.14 | ? | Vault import/export as a zip of `.md` files, previewed and undoable. |
+| 0.15 | ? | The graph draws nesting by default with wikilinks as a toggle; wikilinks are always coloured; a vault-wide link check that suggests and applies corrections. |
 
 **A phase is not a version**, which is what made this confusing: phase 1 —
 "initial data and UI setup" — shipped as both 0.1 and 0.2, so the columns
@@ -428,8 +465,8 @@ Ask rather than guessing, and write the answer down here when you get it.
   `vaultStore` (notes, the open note, autosave, `linksVersion`).
 - `src/components/` — the shell (`Ribbon`, `LeftSidebar`, `RightSidebar`,
   `EditorPane`, `StatusBar`, `LoginGate`), the panels (`FileTree`,
-  `SearchPanel`, `TagsPanel`, `GraphView`), `SettingsModal`, `LinkChoice` (the
-  ambiguous-link popover), `Resizer`, `Icon`, and `Mark`.
+  `SearchPanel`, `TagsPanel`, `GraphView`), `SettingsModal`, `LinkCheckModal` (the
+  broken-link review), `LinkChoice` (the ambiguous-link popover), `Resizer`, `Icon`, and `Mark`.
 - `src/lib/` — the Supabase client, vault path helpers (`paths.ts`, unit
   tested), the note data access layer (`notes.ts`), personal tokens
   (`tokens.ts`), live updates (`live.ts`), zip import/export
@@ -486,6 +523,19 @@ Ask rather than guessing, and write the answer down here when you get it.
   is a lezer inline parser so the editor ignores links inside code blocks.
   Change one rule and change the other — brackets are already excluded from
   targets in both.
+- **CodeMirror's syntax tree arrives late, and nothing tells the decorations
+  so.** In a note of any length the parser stops at a time budget and finishes
+  in the background; asking for decorations over an unparsed region finds
+  nothing, and when the parse catches up it dispatches no doc, selection, or
+  viewport change. That is why `livePreview` rebuilds when
+  `syntaxTree(update.startState) !== syntaxTree(update.state)` — without it a
+  `[[wikilink]]` far enough down a long note renders as ordinary text until
+  something else happens to rebuild. Any future decoration source has the same
+  trap.
+- **`textDecoration: 'underline'` is a shorthand and resets the style.** The
+  dashed/dotted difference between an unresolved and an ambiguous link is set
+  with `textDecorationLine` + `textDecorationStyle` for that reason; the hover
+  rule sets the *line* only, or it would quietly turn a dashed link solid.
 - **The mark lives in three places and they must agree**: `public/icon.svg`
   (favicon and the source for the PNGs), `design/icon-maskable.svg` (same mark,
   full-bleed ground, inside Android's 80% safe circle), and
@@ -562,7 +612,7 @@ Ask rather than guessing, and write the answer down here when you get it.
 ## Not yet set up
 
 - **Component and end-to-end tests.** `npm test` covers `lib/markdown/parse.ts`,
-  `lib/markdown/resolve.ts`, and the MCP server's protocol layer (`netlify/lib/mcp/server.test.ts`, which
+  `lib/markdown/resolve.ts`, `lib/paths.ts`, `lib/linkCheck.ts`, and the MCP server's protocol layer (`netlify/lib/mcp/server.test.ts`, which
   stubs Supabase at the `fetch` boundary), through Node's built-in runner and
   type stripping — `tsconfig.test.json` type-checks both separately, outside
   the app's build graph. Everything else is verified by driving the app per the

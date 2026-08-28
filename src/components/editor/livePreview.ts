@@ -162,10 +162,20 @@ export const livePreview = ViewPlugin.fromClass(
     update(update: ViewUpdate) {
       // Selection changes matter as much as edits here: moving the cursor onto
       // a line is what reveals its syntax.
+      //
+      // So does the syntax tree changing, and that one is easy to miss: in a
+      // note of any length CodeMirror parses only as far as it can afford to
+      // and finishes the rest in the background. Scrolling asks for
+      // decorations over a region that has not been parsed yet, so nothing
+      // is found there — and when the parser does catch up it dispatches no
+      // doc, selection, or viewport change of its own. Without this, a
+      // [[wikilink]] far enough down a long note stays the colour of ordinary
+      // text until something else happens to rebuild.
       if (
         update.docChanged ||
         update.selectionSet ||
         update.viewportChanged ||
+        syntaxTree(update.startState) !== syntaxTree(update.state) ||
         update.transactions.some((tr) => tr.effects.some((e) => e.is(setVaultIndex)))
       ) {
         this.decorations = buildDecorations(update.view)

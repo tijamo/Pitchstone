@@ -195,16 +195,25 @@ function attachFolderNotes<T extends { path: string }>(nodes: TreeNode<T>[]): vo
   }
 }
 
-function reparent<T extends { path: string; title: string; parent?: string | null }>(
+/**
+ * Each note's single, unambiguous, terminating `parent`, resolved by the
+ * caller's own matching rule (`matchNotesByTarget`, passed in for the same
+ * reason buildTree takes it — see that function's note).
+ *
+ * Separated from the tree building because nesting is a relation in its own
+ * right, not a detail of the file explorer: the graph draws the same edges,
+ * and the two must agree about what nests under what. A `parent` that names
+ * more than one note, no note, the note itself, or that would close a cycle,
+ * is dropped — nesting only helps when it unambiguously terminates, and a
+ * note whose parent is dropped simply stays where its path already puts it.
+ */
+export function resolveParents<T extends { path: string; title: string; parent?: string | null }>(
   notes: T[],
-  fileNodes: Map<T, TreeFile<T>>,
-  root: TreeFolder<T>,
   matchByTarget: (notes: T[], target: string) => T[],
-): void {
-  // Resolve each note's own single, unambiguous parent first — a bare
-  // "matchByTarget" lookup per note — before moving anything, so cycle
-  // detection below sees the whole chain rather than a tree that is already
-  // being rearranged out from under it.
+): Map<T, T> {
+  // Resolve every note's own parent first — a bare "matchByTarget" lookup per
+  // note — before dropping anything, so cycle detection below sees the whole
+  // chain rather than one already being taken apart underneath it.
   const parentOf = new Map<T, T>()
   for (const note of notes) {
     if (!note.parent) continue
@@ -230,6 +239,16 @@ function reparent<T extends { path: string; title: string; parent?: string | nul
       current = parentOf.get(current)
     }
   }
+  return parentOf
+}
+
+function reparent<T extends { path: string; title: string; parent?: string | null }>(
+  notes: T[],
+  fileNodes: Map<T, TreeFile<T>>,
+  root: TreeFolder<T>,
+  matchByTarget: (notes: T[], target: string) => T[],
+): void {
+  const parentOf = resolveParents(notes, matchByTarget)
 
   for (const [note, parentNote] of parentOf) {
     const childNode = fileNodes.get(note)

@@ -12,6 +12,7 @@ export type IconName =
   | 'focus'
   | 'tag'
   | 'links'
+  | 'link-broken'
   | 'list'
   | 'settings'
   | 'key'
@@ -69,6 +70,14 @@ const PATHS: Record<IconName, ReactElement> = {
     <>
       <path d="M10 13a4 4 0 0 0 5.7.3l3-3A4 4 0 0 0 13 4.7l-1.4 1.4" />
       <path d="M14 11a4 4 0 0 0-5.7-.3l-3 3A4 4 0 0 0 11 19.3l1.4-1.4" />
+    </>
+  ),
+  // The two halves of a chain, pulled apart — a link that no longer reaches.
+  'link-broken': (
+    <>
+      <path d="M10.5 7H8a5 5 0 0 0 0 10h2.5" />
+      <path d="M13.5 7H16a5 5 0 0 1 0 10h-2.5" />
+      <path d="M12 3.5v2M12 18.5v2" />
     </>
   ),
   list: (

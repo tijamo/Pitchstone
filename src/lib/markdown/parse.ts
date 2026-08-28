@@ -221,3 +221,30 @@ export function collectTags(content: string): string[] {
   }
   return tags
 }
+
+/**
+ * Rewrite every `[[wikilink]]` in `content` whose target is `from` so that it
+ * points at `to`, leaving aliases, the `!` of an embed, and everything else in
+ * the note exactly as it was.
+ *
+ * Targets are compared the way a link resolves — trimmed, case-insensitively —
+ * so correcting `gotchas` catches `[[Gotchas]]` in the same note. This is the
+ * one place a link is edited by anything other than the person typing it, and
+ * it works from extractLinks' own offsets rather than a second regex, so the
+ * two can never disagree about where a link starts and ends.
+ */
+export function replaceLinkTarget(content: string, from: string, to: string): string {
+  const wanted = from.trim().toLowerCase()
+  if (!wanted) return content
+
+  let out = ''
+  let cursor = 0
+  for (const link of extractLinks(content)) {
+    if (link.target.toLowerCase() !== wanted) continue
+    const marker = link.type === 'embed' ? '!' : ''
+    const alias = link.alias ? `|${link.alias}` : ''
+    out += content.slice(cursor, link.from) + `${marker}[[${to}${alias}]]`
+    cursor = link.to
+  }
+  return out + content.slice(cursor)
+}

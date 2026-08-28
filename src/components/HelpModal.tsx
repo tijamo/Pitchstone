@@ -53,6 +53,12 @@ export function HelpModal() {
             An unqualified link to a shared title is shown differently (dotted) so it is obvious it
             needs qualifying, the same way a link to a title nothing carries yet is shown dashed.
           </p>
+          <p className="modal__note">
+            The <strong>Check links</strong> button at the top of the file list reads every link in
+            the vault at once and lists the ones that need attention, with the corrections it can
+            work out for itself — the note a misspelling probably meant, or the qualified form of a
+            shared title. One click rewrites the link where it is written.
+          </p>
         </section>
 
         <section className="modal__section">

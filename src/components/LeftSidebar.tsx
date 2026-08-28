@@ -18,6 +18,7 @@ export function LeftSidebar() {
   const leftWidth = useUiStore((s) => s.leftWidth)
   const mobile = useUiStore((s) => s.mobile)
   const setLeftTab = useUiStore((s) => s.setLeftTab)
+  const setLinkCheckOpen = useUiStore((s) => s.setLinkCheckOpen)
 
   const notes = useVaultStore((s) => s.notes)
   const loading = useVaultStore((s) => s.loading)
@@ -53,14 +54,24 @@ export function LeftSidebar() {
             <span className="sidebar__header-label">
               {notes.length} {notes.length === 1 ? 'note' : 'notes'}
             </span>
-            <button
-              className="tree__action"
-              title="New note"
-              aria-label="New note"
-              onClick={() => void create()}
-            >
-              <Icon name="file-plus" size={14} />
-            </button>
+            <span className="sidebar__header-actions">
+              <button
+                className="tree__action"
+                title="Check links"
+                aria-label="Check links"
+                onClick={() => setLinkCheckOpen(true)}
+              >
+                <Icon name="link-broken" size={14} />
+              </button>
+              <button
+                className="tree__action"
+                title="New note"
+                aria-label="New note"
+                onClick={() => void create()}
+              >
+                <Icon name="file-plus" size={14} />
+              </button>
+            </span>
           </div>
 
           <div className="sidebar__body">

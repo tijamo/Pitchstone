@@ -11,6 +11,16 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.15',
+    title: 'The graph shows where notes live, and links can be checked',
+    items: [
+      "The graph now draws your vault's nesting — notes inside their folders, and notes under whatever note they nest beneath — as its standing view, so it shows how the vault is organised rather than only how it is cross-referenced.",
+      'The chain button on the graph lays [[wikilinks]] over the top, and takes them away again; the choice is remembered between sessions. Placeholder circles for links to notes that do not exist come and go with it.',
+      'A [[wikilink]] is now always coloured, wherever it sits in a note. In a long one it could previously stay the colour of ordinary text, because the editor had not finished reading that far and never went back. Links to a note that does not exist are dashed, and ones naming more than one note dotted, which they were meant to be all along.',
+      "New Check links button at the top of the file list: it reads every link in the vault at once and lists the ones that name no note, or more than one. Each comes with the corrections the vault can suggest — the note it was probably meant to be, or the same name said precisely enough to pick one — and one click rewrites the link in place. Or write the missing note instead, and the link mends itself.",
+    ],
+  },
+  {
     ver: '0.14',
     title: 'Import and export your vault',
     items: [
