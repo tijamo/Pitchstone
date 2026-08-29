@@ -18,7 +18,7 @@
  * default export — everything here runs under Node's test runner instead.
  */
 import { TOOLS, TOOLS_BY_NAME } from './tools.ts'
-import { VaultError, vaultInfo } from './vault.ts'
+import { VaultError, authorizationServer, vaultInfo } from './vault.ts'
 
 const SERVER_INFO = {
   name: 'pitchstone',
@@ -99,6 +99,16 @@ const CORS: Record<string, string> = {
   'access-control-max-age': '86400',
 }
 
+/**
+ * The RFC 9728 discovery URL for this server, at the path an MCP client tries
+ * first per the authorization spec's discovery order. Derived from the
+ * request's own origin rather than a hardcoded domain, so this keeps working
+ * on a branch deploy or in local dev without a second place to update.
+ */
+function resourceMetadataUrl(request: Request): string {
+  return `${new URL(request.url).origin}/.well-known/oauth-protected-resource/mcp`
+}
+
 // ---------------------------------------------------------------------------
 
 export async function handleMcpRequest(request: Request): Promise<Response> {
@@ -115,7 +125,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
   const token = bearer(request)
   if (!token) {
     return json(failure(null, INVALID_REQUEST, 'Missing bearer token.'), 401, {
-      'www-authenticate': 'Bearer realm="Pitchstone"',
+      'www-authenticate': `Bearer resource_metadata="${resourceMetadataUrl(request)}"`,
     })
   }
 
@@ -140,7 +150,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
     // appearing to connect and then failing every call it makes.
     if (error instanceof VaultError && error.kind === 'auth') {
       return json(failure(null, INVALID_REQUEST, 'That token is not valid for this vault.'), 401, {
-        'www-authenticate': 'Bearer realm="Pitchstone", error="invalid_token"',
+        'www-authenticate': `Bearer resource_metadata="${resourceMetadataUrl(request)}", error="invalid_token"`,
       })
     }
     throw error
@@ -251,4 +261,43 @@ function describe(error: unknown): string {
     return error.message
   }
   return error instanceof Error ? error.message : String(error)
+}
+
+// ---------------------------------------------------------------------------
+// OAuth 2.0 Protected Resource Metadata (RFC 9728)
+// ---------------------------------------------------------------------------
+
+const METADATA_CORS: Record<string, string> = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-max-age': '86400',
+}
+
+/**
+ * Mounted at /.well-known/oauth-protected-resource and, more specifically,
+ * /.well-known/oauth-protected-resource/mcp — an MCP client tries the latter
+ * first per the authorization spec's discovery order, and the 401s above
+ * point at it directly, but both paths answer the same document since
+ * nothing else on this site is a protected resource.
+ *
+ * `authorization_servers` names Tijamo-hub's own OAuth 2.1 server (its
+ * consent screen lives at identity.tijamo.app); Pitchstone issues no tokens
+ * of its own; it only ever validates ones that server signed.
+ */
+export function handleProtectedResourceMetadata(request: Request): Response {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: METADATA_CORS })
+  if (request.method !== 'GET') {
+    return new Response(null, { status: 405, headers: { ...METADATA_CORS, allow: 'GET, OPTIONS' } })
+  }
+
+  const origin = new URL(request.url).origin
+  return json(
+    {
+      resource: `${origin}/mcp`,
+      authorization_servers: [authorizationServer()],
+      bearer_methods_supported: ['header'],
+    },
+    200,
+    METADATA_CORS,
+  )
 }

@@ -18,6 +18,17 @@ process.env.VITE_SUPABASE_ANON_KEY = 'anon-key-for-tests'
 const GOOD = 'pst_a_valid_looking_token_value'
 const BAD = 'pst_not_a_token_at_all_no_sir'
 
+/** Just enough of a JWT's shape for vault.ts's own unverified decode — the
+ * fake below stands in for PostgREST, which is what would really check the
+ * signature. */
+function fakeJwt(payload: Record<string, unknown>): string {
+  const part = (v: unknown) => Buffer.from(JSON.stringify(v)).toString('base64url')
+  return `${part({ alg: 'HS256', typ: 'JWT' })}.${part(payload)}.sig`
+}
+
+const GOOD_JWT = fakeJwt({ sub: 'user-1', role: 'authenticated', client_id: 'oauth-client-1' })
+const SESSION_JWT = fakeJwt({ sub: 'user-1', role: 'authenticated' }) // no client_id: not OAuth-issued
+
 type Row = { path: string; content: string; tags: string[]; updated: string }
 
 let vault: Map<string, Row>
@@ -33,7 +44,15 @@ function fakeSupabase(input: string | URL | Request, init?: RequestInit): Promis
     Promise.resolve(new Response(JSON.stringify({ code, message }), { status }))
   const ok = (value: unknown) => Promise.resolve(new Response(JSON.stringify(value)))
 
-  if (args.p_token !== GOOD) return fail('28000', 'invalid token', 403)
+  const headers = (init?.headers ?? {}) as Record<string, string>
+  if (args.p_token === null) {
+    // OAuth path: real PostgREST would verify the JWT's signature itself
+    // before this function ever ran. The fake just checks it's the one
+    // these tests consider genuine.
+    if (headers.authorization !== `Bearer ${GOOD_JWT}`) return fail('PGRST301', 'JWT invalid', 401)
+  } else if (args.p_token !== GOOD) {
+    return fail('28000', 'invalid token', 403)
+  }
 
   const titleOf = (path: string) => path.replace(/^.*\//, '').replace(/\.md$/, '')
   const find = (ref: string): Row | undefined =>
@@ -161,11 +180,12 @@ async function rpc<T>(
 }
 
 /** tools/call, unwrapped to the text the model would actually read. */
-async function callTool(name: string, args: Record<string, unknown> = {}) {
-  const body = await rpc<{ content: { text: string }[]; isError?: boolean }>('tools/call', {
-    name,
-    arguments: args,
-  })
+async function callTool(name: string, args: Record<string, unknown> = {}, token = GOOD) {
+  const body = await rpc<{ content: { text: string }[]; isError?: boolean }>(
+    'tools/call',
+    { name, arguments: args },
+    token,
+  )
   return { text: body.result.content[0].text, isError: body.result.isError === true }
 }
 
@@ -197,10 +217,13 @@ describe('transport', () => {
     assert.equal(response.headers.get('access-control-allow-origin'), '*')
   })
 
-  it('requires a bearer token', async () => {
+  it('requires a bearer token, and points at where to get one', async () => {
     const response = await call({ jsonrpc: '2.0', id: 1, method: 'ping' }, null)
     assert.equal(response.status, 401)
-    assert.match(response.headers.get('www-authenticate') ?? '', /Bearer/)
+    assert.match(
+      response.headers.get('www-authenticate') ?? '',
+      /^Bearer resource_metadata="https:\/\/pitchstone\.test\/\.well-known\/oauth-protected-resource\/mcp"$/,
+    )
   })
 
   it('rejects a token the vault does not know, at connection time', async () => {
@@ -209,6 +232,7 @@ describe('transport', () => {
       BAD,
     )
     assert.equal(response.status, 401)
+    assert.match(response.headers.get('www-authenticate') ?? '', /error="invalid_token"/)
   })
 
   it('rejects a body that is not JSON', async () => {
@@ -243,6 +267,66 @@ describe('transport', () => {
   it('reports an unknown method rather than failing silently', async () => {
     const body = await rpc<never>('resources/list')
     assert.equal(body.error?.code, -32601)
+  })
+})
+
+describe('OAuth', () => {
+  before(() => {
+    vault = new Map()
+  })
+
+  it('accepts an OAuth-issued JWT in place of a personal token', async () => {
+    const { text, isError } = await callTool('vault_info', {}, GOOD_JWT)
+    assert.ok(!isError, text)
+    assert.match(text, /notes, /)
+  })
+
+  it('refuses a plain session JWT with no client_id claim', async () => {
+    const { text, isError } = await callTool('vault_info', {}, SESSION_JWT)
+    assert.ok(isError)
+    assert.match(text, /not valid for this vault/i)
+  })
+
+  it('refuses a token that is neither pst_ nor JWT-shaped', async () => {
+    const { text, isError } = await callTool('vault_info', {}, 'not-a-real-token')
+    assert.ok(isError)
+    assert.match(text, /not valid for this vault/i)
+  })
+
+  it('serves RFC 9728 protected resource metadata', async () => {
+    const { handleProtectedResourceMetadata } = await import('./server.ts')
+    const response = handleProtectedResourceMetadata(
+      new Request('https://pitchstone.test/.well-known/oauth-protected-resource/mcp'),
+    )
+    assert.equal(response.status, 200)
+    const body = (await response.json()) as {
+      resource: string
+      authorization_servers: string[]
+      bearer_methods_supported: string[]
+    }
+    assert.equal(body.resource, 'https://pitchstone.test/mcp')
+    assert.deepEqual(body.authorization_servers, ['https://vault.test/auth/v1'])
+    assert.deepEqual(body.bearer_methods_supported, ['header'])
+  })
+
+  it('answers a preflight on the metadata route too', async () => {
+    const { handleProtectedResourceMetadata } = await import('./server.ts')
+    const response = handleProtectedResourceMetadata(
+      new Request('https://pitchstone.test/.well-known/oauth-protected-resource/mcp', {
+        method: 'OPTIONS',
+      }),
+    )
+    assert.equal(response.status, 204)
+  })
+
+  it('refuses anything but GET or OPTIONS on the metadata route', async () => {
+    const { handleProtectedResourceMetadata } = await import('./server.ts')
+    const response = handleProtectedResourceMetadata(
+      new Request('https://pitchstone.test/.well-known/oauth-protected-resource/mcp', {
+        method: 'POST',
+      }),
+    )
+    assert.equal(response.status, 405)
   })
 })
 

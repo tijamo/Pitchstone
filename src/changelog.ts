@@ -11,6 +11,14 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.16',
+    title: 'Claude can connect without a personal token',
+    items: [
+      'The MCP server now accepts sign-in through Tijamo’s own OAuth server as well as a personal token — useful for a connector, like Claude’s, that signs in on its own rather than being handed a token to paste in. Settings → Claude access and personal tokens themselves are unchanged; this is a second way in, not a replacement.',
+      'A client that tries to connect without a token, or with one this vault does not recognise, is now pointed straight at where to get one, rather than just being told no.',
+    ],
+  },
+  {
     ver: '0.15',
     title: 'The graph shows where notes live, and links can be checked',
     items: [

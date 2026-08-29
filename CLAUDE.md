@@ -248,6 +248,22 @@ can read and write the same vault.
   from it, so a user id is never something a caller supplies. That is why every
   MCP operation is its own SQL function rather than a query in TypeScript — the
   narrow door is the security model.
+- **Two kinds of credential reach `/mcp` (v0.16), and they meet at one function.**
+  A personal token (`pst_...`) still resolves through the `token_hash` lookup;
+  anything else is treated as a bearer token from Tijamo-hub's own OAuth 2.1
+  server (its consent screen is `identity.tijamo.app`, a separate repo —
+  `tijamo/identity` — since the OAuth server belongs to the shared Supabase
+  project, not to Pitchstone). `netlify/lib/mcp/vault.ts`'s `rpc()` is where the
+  two paths meet: a personal token is sent as `p_token` with the anon key doing
+  the asking, same as always; anything else is sent as the request's own
+  `Authorization` header with `p_token: null`, so PostgREST verifies the JWT
+  itself before `pitchstone_token_user` ever runs — its null branch is just
+  `auth.uid()`. Every `pitchstone_mcp_*` function already routes through that
+  one function, so that is the *entire* SQL-side change OAuth needed.
+  `/.well-known/oauth-protected-resource(/mcp)` (RFC 9728, another Netlify
+  Function, `handleProtectedResourceMetadata` in `server.ts`) tells a client
+  where to go; a 401 from `/mcp` points at it via `WWW-Authenticate:
+  resource_metadata="..."`.
 - **The graph lives in the left panel**, as a fourth tab beside files, search
   and tags — moved back there in v0.15.1 (it sat in the right sidebar from
   v0.4). That panel is unmounted when another tab is showing, so `GraphView`
@@ -415,6 +431,7 @@ minor bump.
 | 0.13 | ? | Registration approval, shared across every Tijamo app. |
 | 0.14 | ? | Vault import/export as a zip of `.md` files, previewed and undoable. |
 | 0.15 | ? | The graph draws nesting by default with wikilinks as a toggle; wikilinks are always coloured; a vault-wide link check that suggests and applies corrections. 0.15.1 moved the graph to the left panel, let either panel go full width, and made note labels fade sooner when zooming out. |
+| 0.16 | ? | The MCP server accepts an OAuth-issued token from Tijamo-hub's own OAuth 2.1 server (consent screen at `identity.tijamo.app`, a separate repo, `tijamo/identity`) alongside personal tokens — a client like Claude's can now sign in on its own instead of being handed a token to paste in. |
 
 **A phase is not a version**, which is what made this confusing: phase 1 —
 "initial data and UI setup" — shipped as both 0.1 and 0.2, so the columns
@@ -457,11 +474,15 @@ Ask rather than guessing, and write the answer down here when you get it.
 - `netlify/functions/mcp.mts` — the `/mcp` route and nothing else. It declares
   its own `config.path`, which registers the route *ahead* of the SPA fallback;
   without that, `netlify.toml`'s `/*` rule would answer `/mcp` with the app.
+- `netlify/functions/oauth-protected-resource.mts` — same shape, for
+  `/.well-known/oauth-protected-resource` and its `/mcp`-suffixed form (RFC
+  9728), which is what tells an OAuth-capable MCP client where to sign in.
 - `netlify/lib/mcp/` — the server proper, out of the functions directory so
   Netlify does not treat each file as another function and so the tests can
-  import it: `server.ts` (JSON-RPC and the HTTP transport), `tools.ts` (the
-  nine tools and what they say back), `vault.ts` (the RPC calls), and
-  `server.test.ts`.
+  import it: `server.ts` (JSON-RPC, the HTTP transport, and the protected-
+  resource metadata handler), `tools.ts` (the nine tools and what they say
+  back), `vault.ts` (the RPC calls, and the personal-token/OAuth-JWT split),
+  and `server.test.ts`.
 - `vite.config.ts` — exposes `package.json`'s version to the bundle as
   `__APP_VERSION__`, which the status bar renders, and configures
   `vite-plugin-pwa` (manifest, icons, precache).
@@ -575,6 +596,25 @@ Ask rather than guessing, and write the answer down here when you get it.
   `anon` and `authenticated` — so `revoke ... from public` alone leaves the
   grant standing. Revoke from all three by name, and check with
   `has_function_privilege` afterwards rather than assuming.
+- **An OAuth JWT is decoded, unverified, before it ever reaches Supabase — and
+  that is deliberately fine.** `vault.ts`'s `rpc()` checks the token's `client_id`
+  claim to tell an OAuth-issued access token apart from an ordinary Supabase
+  session token (the app's own sign-in, or a stray anon-session JWT) that has
+  no business at `/mcp` — the token-passthrough the MCP spec forbids. The check
+  only ever *rejects*; PostgREST verifies the actual signature the moment the
+  token is used for anything real, so a forged `client_id` gets nowhere. This
+  is also the closest thing to audience validation `/mcp` does today: Supabase
+  doesn't stamp a resource-scoped `aud` without a Custom Access Token Hook,
+  which hasn't been set up.
+- **A client asking for the `openid` scope would break right now.** Tijamo-hub
+  still signs JWTs with the legacy HS256 secret (asymmetric signing was
+  recommended when OAuth went in but never actually done), and Supabase refuses
+  to mint an ID token under HS256. The one thing keeping this from mattering:
+  `/.well-known/oauth-protected-resource(/mcp)` advertises no `scopes_supported`
+  at all, and a client is only supposed to request scopes from *that* document,
+  not from the identity provider's own `scopes_supported` (which does list
+  `openid`). Don't add a scope to the protected-resource metadata without
+  checking the signing-key situation on Tijamo-hub first.
 - **A v2 function with a custom `config.path` is not reachable at the classic
   `/.netlify/functions/<name>` URL.** `netlify.toml` used to carry a redundant
   `[[redirects]]` rule forwarding `/mcp` to `/.netlify/functions/mcp` "so the

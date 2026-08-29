@@ -2,10 +2,18 @@
  * The MCP server's data layer.
  *
  * Every call is a single PostgREST RPC against one of the pitchstone_mcp_*
- * functions, with the personal token as the first argument. There is no
- * service-role key here and no `user_id` anywhere in this file: the database
- * derives the owner from the token itself, so the worst a bug in this module
- * can do is address the wrong note in the *caller's own* vault.
+ * functions. There is no service-role key here and no `user_id` anywhere in
+ * this file: the database derives the owner from the credential itself, so
+ * the worst a bug in this module can do is address the wrong note in the
+ * *caller's own* vault.
+ *
+ * Two kinds of credential reach here now. A personal token (`pst_...`) is
+ * opaque outside this database and is passed as `p_token`, exactly as
+ * before. Anything else is treated as a bearer token issued by Tijamo-hub's
+ * own OAuth 2.1 server (see identity.tijamo.app) and is handed to PostgREST
+ * as the request's own Authorization header instead — its signature and
+ * expiry are verified there, not here, and `p_token` goes across as null so
+ * `pitchstone_token_user` falls back to `auth.uid()`.
  *
  * Plain fetch rather than @supabase/supabase-js: nine RPC calls and no auth,
  * realtime, or storage, so the client would be several hundred kilobytes of
@@ -41,6 +49,17 @@ function connection(): { url: string; key: string } {
   return { url, key }
 }
 
+/**
+ * The OAuth 2.1 authorization server that issues the JWTs this module also
+ * accepts — Tijamo-hub's own Supabase Auth, at the same project the anon key
+ * above already points at. Exported for the protected-resource metadata
+ * endpoint, which needs to advertise it.
+ */
+export function authorizationServer(): string {
+  const { url } = connection()
+  return `${url}/auth/v1`
+}
+
 export type VaultErrorKind = 'auth' | 'not-found' | 'conflict' | 'invalid' | 'ambiguous' | 'server'
 
 export class VaultError extends Error {
@@ -66,17 +85,54 @@ const ERROR_KINDS: Record<string, VaultErrorKind> = {
   '22P02': 'invalid', // malformed input to a parameter
 }
 
-async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+function isPersonalToken(token: string): boolean {
+  return token.startsWith('pst_')
+}
+
+/**
+ * Reads a JWT's payload without verifying its signature — PostgREST does
+ * that the moment the token is actually used below, so this is only ever a
+ * cheap pre-filter, never what actually stands between an attacker and the
+ * vault. Its one job is telling an OAuth-issued access token apart from an
+ * ordinary Supabase session token that wandered into this header: only the
+ * former carries a `client_id` claim, which is the only OAuth-specific thing
+ * Supabase's default token shape gives us to check without installing a
+ * Custom Access Token Hook to stamp a resource-scoped `aud`.
+ */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const segment = token.split('.')[1]
+  if (!segment) return null
+  try {
+    const base64 = segment.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
+    return JSON.parse(atob(padded)) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+async function rpc<T>(fn: string, token: string, args: Record<string, unknown>): Promise<T> {
   const { url, key } = connection()
+  const personal = isPersonalToken(token)
+
+  if (!personal) {
+    const claims = decodeJwtPayload(token)
+    if (!claims || typeof claims.client_id !== 'string') {
+      // Rejected before it ever reaches PostgREST: a plain Supabase session
+      // token (the app's own sign-in) has no client_id, and passing it
+      // through here would be exactly the token-passthrough MCP forbids.
+      throw new VaultError('That token is not valid for this vault.', 'auth')
+    }
+  }
 
   const response = await fetch(`${url}/rest/v1/rpc/${fn}`, {
     method: 'POST',
     headers: {
       apikey: key,
-      authorization: `Bearer ${key}`,
+      authorization: `Bearer ${personal ? key : token}`,
       'content-type': 'application/json',
     },
-    body: JSON.stringify(args),
+    body: JSON.stringify({ ...args, p_token: personal ? token : null }),
   })
 
   const body = await response.text()
@@ -90,7 +146,12 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     } catch {
       // A non-JSON body means something upstream of PostgREST answered.
     }
-    throw new VaultError(message || response.statusText, ERROR_KINDS[code] ?? 'server')
+    // A bad or expired OAuth JWT is rejected by PostgREST itself, before
+    // pitchstone_token_user ever runs, with its own error shape rather than
+    // one of the SQLSTATEs above — so any 401 here means "not authenticated",
+    // regardless of what code (if any) came back.
+    const kind = response.status === 401 ? 'auth' : (ERROR_KINDS[code] ?? 'server')
+    throw new VaultError(message || response.statusText, kind)
   }
 
   return JSON.parse(body) as T
@@ -157,15 +218,14 @@ export type VaultInfo = {
 }
 
 export function vaultInfo(token: string): Promise<VaultInfo> {
-  return rpc<VaultInfo>('pitchstone_mcp_vault_info', { p_token: token })
+  return rpc<VaultInfo>('pitchstone_mcp_vault_info', token, {})
 }
 
 export function listNotes(
   token: string,
   options: { folder?: string; tag?: string; limit?: number } = {},
 ): Promise<NoteSummary[]> {
-  return rpc<NoteSummary[]>('pitchstone_mcp_list_notes', {
-    p_token: token,
+  return rpc<NoteSummary[]>('pitchstone_mcp_list_notes', token, {
     p_folder: options.folder ?? null,
     p_tag: options.tag ?? null,
     p_limit: options.limit ?? null,
@@ -175,8 +235,7 @@ export function listNotes(
 /** `returns table` with one row, so the array is unwrapped here rather than
  * leaving every caller to remember that a note is not a list. */
 export async function getNote(token: string, path: string): Promise<NoteDetail> {
-  const rows = await rpc<NoteDetail[]>('pitchstone_mcp_get_note', {
-    p_token: token,
+  const rows = await rpc<NoteDetail[]>('pitchstone_mcp_get_note', token, {
     p_path: path,
   })
   if (rows.length === 0) throw new VaultError(`No note matching "${path}".`, 'not-found')
@@ -188,8 +247,7 @@ export function searchNotes(
   query: string,
   limit?: number,
 ): Promise<{ path: string; title: string; snippet: string }[]> {
-  return rpc('pitchstone_mcp_search', {
-    p_token: token,
+  return rpc('pitchstone_mcp_search', token, {
     p_query: query,
     p_limit: limit ?? null,
   })
@@ -198,11 +256,11 @@ export function searchNotes(
 export type BacklinkSource = { path: string; title: string; content: string }
 
 export function backlinks(token: string, path: string): Promise<BacklinkSource[]> {
-  return rpc('pitchstone_mcp_backlinks', { p_token: token, p_path: path })
+  return rpc('pitchstone_mcp_backlinks', token, { p_path: path })
 }
 
 export function listTags(token: string): Promise<{ tag: string; uses: number }[]> {
-  return rpc('pitchstone_mcp_tags', { p_token: token })
+  return rpc('pitchstone_mcp_tags', token, {})
 }
 
 // ---------------------------------------------------------------------------
@@ -230,8 +288,7 @@ export async function writeNote(
   path: string,
   content: string,
 ): Promise<WriteResult> {
-  const rows = await rpc<WriteResult[]>('pitchstone_mcp_write_note', {
-    p_token: token,
+  const rows = await rpc<WriteResult[]>('pitchstone_mcp_write_note', token, {
     p_path: normalizePath(path),
     p_content: content,
     p_tags: collectTags(content),
@@ -246,8 +303,7 @@ export async function renameNote(
   path: string,
   to: string,
 ): Promise<{ path: string; title: string }> {
-  const rows = await rpc<{ path: string; title: string }[]>('pitchstone_mcp_rename_note', {
-    p_token: token,
+  const rows = await rpc<{ path: string; title: string }[]>('pitchstone_mcp_rename_note', token, {
     p_path: path,
     p_to: normalizePath(to),
   })
@@ -256,5 +312,5 @@ export async function renameNote(
 }
 
 export function deleteNote(token: string, path: string): Promise<string> {
-  return rpc<string>('pitchstone_mcp_delete_note', { p_token: token, p_path: path })
+  return rpc<string>('pitchstone_mcp_delete_note', token, { p_path: path })
 }
