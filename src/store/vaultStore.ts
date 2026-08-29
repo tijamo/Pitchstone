@@ -23,7 +23,7 @@ import { dirname, joinPath, sanitizeSegment, toPath, uniquePath } from '../lib/p
  * unaffected; this only covers the otherwise-homeless case.
  */
 export const DEFAULT_NOTE_FOLDER = 'Memory/Notes'
-import { matchNotesByTarget } from '../lib/markdown/resolve'
+import { matchFolderState, matchNotesByTarget } from '../lib/markdown/resolve'
 import { replaceLinkTarget } from '../lib/markdown/parse'
 
 export type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
@@ -269,6 +269,19 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       await state.open(matches[0].id)
       return
     }
+
+    // Nothing matches directly. A target naming a folder — "Flowa", or a
+    // qualified "Projects/Flowa" — opens that project's own state.md instead
+    // of creating a same-named note alongside it, the way the vault's own
+    // Memory/Projects/<Project>/state.md convention treats a project name
+    // (see matchFolderState). More than one folder answering to it is left
+    // alone, same as an ambiguous note match above — nothing here guesses.
+    const stateMatches = matchFolderState(state.notes, target)
+    if (stateMatches.length === 1) {
+      await state.open(stateMatches[0].id)
+      return
+    }
+    if (stateMatches.length > 1) return
 
     // Nothing matches. A folder-qualified target ("Projects/New") creates the
     // note at that literal path; a bare name creates it alongside whichever

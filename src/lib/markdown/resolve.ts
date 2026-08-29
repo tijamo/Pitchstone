@@ -49,6 +49,22 @@ export function matchNotesByTarget<T extends NoteRef>(notes: T[], target: string
 }
 
 /**
+ * The note a link naming a *folder* should open, by the vault's own project
+ * convention (`Memory/Projects/<Project>/state.md` — see CLAUDE.md): a
+ * `[[Flowa]]` that names no note directly opens `Flowa/state.md` if the vault
+ * has one, rather than the link sitting unresolved or a same-named note being
+ * created alongside it. Reuses `matchNotesByTarget`'s own trailing-segment
+ * rule by appending "/state" to the target, so a qualified "Projects/Flowa"
+ * finds ".../Projects/Flowa/state.md" the same way "Pitchstone/gotchas" finds
+ * a qualified note.
+ */
+export function matchFolderState<T extends NoteRef>(notes: T[], target: string): T[] {
+  const trimmed = target.trim().replace(/\.md$/i, '').replace(/\/+$/, '')
+  if (!trimmed) return []
+  return matchNotesByTarget(notes, `${trimmed}/state`)
+}
+
+/**
  * The shortest trailing slice of `note`'s path that refers to it and nothing
  * else in `notes` — "gotchas" when the title is unique, "Pitchstone/gotchas"
  * when it is not. Used to write a link that will not need disambiguating

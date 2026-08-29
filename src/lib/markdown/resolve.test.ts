@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   duplicateTitles,
+  matchFolderState,
   matchNotesByTarget,
   pathSegments,
   shortestUniqueSuffix,
@@ -71,6 +72,31 @@ describe('matchNotesByTarget', () => {
 
   it('returns nothing for a target naming no note', () => {
     assert.deepEqual(matchNotesByTarget(notes, 'nothing here'), [])
+  })
+})
+
+describe('matchFolderState', () => {
+  const flowaState: NoteRef = { title: 'state', path: 'Memory/Projects/Flowa/state.md' }
+  const withFolder = [...notes, flowaState]
+
+  it('finds a folder’s state.md by its bare name', () => {
+    assert.deepEqual(matchFolderState(withFolder, 'Flowa'), [flowaState])
+  })
+
+  it('finds it by a qualified reference too', () => {
+    assert.deepEqual(matchFolderState(withFolder, 'Projects/Flowa'), [flowaState])
+  })
+
+  it('returns nothing for a folder with no state.md', () => {
+    assert.deepEqual(matchFolderState(withFolder, 'Welcome'), [])
+  })
+
+  it('does not match a note whose own title is “state”', () => {
+    assert.deepEqual(matchFolderState(withFolder, 'state'), [])
+  })
+
+  it('rejects blank input', () => {
+    assert.deepEqual(matchFolderState(withFolder, '  '), [])
   })
 })
 

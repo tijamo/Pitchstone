@@ -15,7 +15,7 @@ import { useVaultStore } from '../store/vaultStore'
 import { useUiStore } from '../store/uiStore'
 import { listLinks } from '../lib/notes'
 import type { NoteMeta } from '../lib/notes'
-import { matchNotesByTarget } from '../lib/markdown/resolve'
+import { matchFolderState, matchNotesByTarget } from '../lib/markdown/resolve'
 import { basename, dirname, folderGraphId, folderNotePath, resolveParents } from '../lib/paths'
 import { Icon } from './Icon'
 
@@ -238,6 +238,7 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
   const setGraphFocus = useUiStore((s) => s.setGraphFocus)
   const graphLinks = useUiStore((s) => s.graphLinks)
   const setGraphLinks = useUiStore((s) => s.setGraphLinks)
+  const setLinkCheckOpen = useUiStore((s) => s.setLinkCheckOpen)
 
   // Which node the focused view is rooted at, only while focus mode is on.
   // graphFocusId is an explicit choice — set by double-clicking a node here,
@@ -571,12 +572,30 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
 
       const endpoints = edges
         .filter((e) => byNoteId.has(e.source_note_id))
-        .map((e) => ({
-          from: e.source_note_id,
-          to: e.target_note_id ?? placeholderId(e.target_title),
-          title: e.target_title,
-          resolved: e.target_note_id != null,
-        }))
+        .map((e) => {
+          if (e.target_note_id != null) {
+            return { from: e.source_note_id, to: e.target_note_id, title: e.target_title, resolved: true }
+          }
+          // A link naming a folder — e.g. [[Flowa]] — draws to that project's
+          // own state.md rather than sitting as an unresolved placeholder;
+          // see vaultStore's openOrCreate, which follows the same convention
+          // when the link is clicked.
+          const stateMatches = matchFolderState(notes, e.target_title)
+          if (stateMatches.length === 1) {
+            return {
+              from: e.source_note_id,
+              to: stateMatches[0].id,
+              title: e.target_title,
+              resolved: true,
+            }
+          }
+          return {
+            from: e.source_note_id,
+            to: placeholderId(e.target_title),
+            title: e.target_title,
+            resolved: false,
+          }
+        })
         // A link out to a note that has since been deleted resolves to
         // nothing and names nothing useful; drop it rather than plot it.
         .filter((e) => !e.resolved || byNoteId.has(e.to))
@@ -1071,6 +1090,15 @@ function GraphCanvas({ notes }: { notes: NoteMeta[] }) {
           onClick={() => setGraphFocus(!graphFocus)}
         >
           <Icon name="focus" />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          title="Check links"
+          aria-label="Check links"
+          onClick={() => setLinkCheckOpen(true)}
+        >
+          <Icon name="link-broken" />
         </button>
       </div>
       {tooltip && (
