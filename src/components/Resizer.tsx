@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
 import {
   useUiStore,
-  DEFAULT_LEFT_WIDTH,
   DEFAULT_RIGHT_WIDTH,
   MIN_PANEL_WIDTH,
+  defaultLeftWidth,
   maxPanelWidth,
 } from '../store/uiStore'
 
@@ -38,8 +38,11 @@ export function Resizer({ side }: { side: 'left' | 'right' }) {
   const grows = side === 'left' ? 1 : -1
 
   // Double-clicking a divider to put it back to its default is a convention
-  // worth honouring — it is the quick way out of an awkward drag.
-  const reset = () => setWidth(side === 'left' ? DEFAULT_LEFT_WIDTH : DEFAULT_RIGHT_WIDTH)
+  // worth honouring — it is the quick way out of an awkward drag. The left
+  // panel's default is the same three tenths of the window it opened at, so a
+  // reset and a fresh session land in the same place.
+  const reset = () =>
+    setWidth(side === 'left' ? defaultLeftWidth(viewport) : DEFAULT_RIGHT_WIDTH)
 
   return (
     <div

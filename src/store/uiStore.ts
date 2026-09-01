@@ -14,16 +14,32 @@ export type LinkChoice = { x: number; y: number; target: string; matches: NoteMe
 
 const THEME_KEY = 'pitchstone:theme'
 const GRAPH_LINKS_KEY = 'pitchstone:graphLinks'
-const LEFT_WIDTH_KEY = 'pitchstone:leftWidth'
 const RIGHT_WIDTH_KEY = 'pitchstone:rightWidth'
 
 /**
- * Panel widths are the user's to set and are remembered between sessions;
- * these are only the first-run values. The left panel starts wider than it
- * used to because the graph lives there now and benefits from the room.
+ * The right panel's width is the user's to set and is remembered between
+ * sessions; this is only its first-run value.
  */
-export const DEFAULT_LEFT_WIDTH = 300
 export const DEFAULT_RIGHT_WIDTH = 300
+
+/**
+ * The left panel's width is deliberately *not* remembered. Every desktop
+ * launch opens on the same view — the graph in three tenths of the window and
+ * the editor in the rest — so the width is derived from the window rather than
+ * read back from a previous session. Dragging it still works and still lasts
+ * the session; it just doesn't carry into the next one.
+ *
+ * The same number is what a double-click on the divider puts the panel back
+ * to, so "reset" and "how it opened" mean the same thing.
+ */
+const LEFT_PANEL_FRACTION = 0.3
+
+export function defaultLeftWidth(viewport?: number): number {
+  const width = viewport ?? (typeof window === 'undefined' ? 0 : window.innerWidth)
+  // No window to measure (a test, or SSR): fall back to a plain sensible width.
+  if (!width) return 300
+  return clampWidth(width * LEFT_PANEL_FRACTION, maxPanelWidth(0, width))
+}
 
 /**
  * Below this width the shell folds to a single pane: the sidebars become
@@ -149,13 +165,16 @@ type UiState = {
   setLinkCheckOpen: (open: boolean) => void
 }
 
-// A cold launch opens the left panel either way, on the tab that layout wants
-// most: the file tree on a desktop, where it is a column beside the editor,
-// and the graph on a phone, where it is a drawer over it and the whole vault
-// at a glance beats a list of file names.
+// A cold launch opens on the graph whatever the layout, because the whole
+// vault at a glance is the view worth starting from and a list of file names
+// is one tab away. On a desktop that is a 70/30: the graph in three tenths of
+// the window, the editor in the rest, and the right panel closed so the split
+// really is 70/30 rather than 30/50/20. On a phone the drawer takes the whole
+// screen instead — a drawer's width belongs to app.css, whose `.sidebar--graph`
+// rule already gives the graph the full width the other panels don't get.
 const startMobile = isMobileWidth()
-const startLeftTab: LeftTab = startMobile ? 'graph' : 'files'
-const startLeftWidth = storedWidth(LEFT_WIDTH_KEY, DEFAULT_LEFT_WIDTH)
+const startLeftTab: LeftTab = 'graph'
+const startLeftWidth = defaultLeftWidth()
 
 export const useUiStore = create<UiState>((set, get) => ({
   mobile: startMobile,
@@ -170,9 +189,11 @@ export const useUiStore = create<UiState>((set, get) => ({
   // alone; setMobile's own resize-driven reset (crossing the breakpoint
   // mid-session) is unaffected too.
   leftOpen: true,
-  // On a phone the two panels are drawers over the same screen, so only one
-  // of them can start open.
-  rightOpen: !startMobile,
+  // Closed on both: on a phone the two panels are drawers over the same screen
+  // so only one of them could start open anyway, and on a desktop an open right
+  // panel would make the launch view 30/50/20 rather than the 70/30 it is meant
+  // to be. The ribbon opens it whenever it is wanted.
+  rightOpen: false,
   leftWidth: startLeftWidth,
   rightWidth: storedWidth(RIGHT_WIDTH_KEY, DEFAULT_RIGHT_WIDTH),
   theme: storedTheme(),
@@ -203,10 +224,12 @@ export const useUiStore = create<UiState>((set, get) => ({
       leftOpen: s.mobile && !s.rightOpen ? false : s.leftOpen,
     })),
 
-  // Crossing the breakpoint resets both panels to what that layout expects:
-  // open beside the editor on a desktop, out of the way on a phone.
+  // Crossing the breakpoint resets both panels to what that layout expects,
+  // which is the same thing a launch into that layout does: the left panel
+  // beside the editor on a desktop and out of the way on a phone, and the
+  // right one closed either way so a resize lands on the same 70/30.
   setMobile: (mobile) =>
-    set((s) => (s.mobile === mobile ? {} : { mobile, leftOpen: !mobile, rightOpen: !mobile })),
+    set((s) => (s.mobile === mobile ? {} : { mobile, leftOpen: !mobile, rightOpen: false })),
 
   setViewport: (viewport) => set((s) => (s.viewport === viewport ? {} : { viewport })),
 
@@ -224,12 +247,12 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   // Both panels are capped by the same rule — everything the window has left
   // after the ribbon and the other panel — so either can be taken to full
-  // width. The stored value is what the user dragged to; fittedWidth is what
-  // gets rendered if the window is currently too small for it.
+  // width. What the user drags to is what is held; fittedWidth is what gets
+  // rendered if the window is currently too small for it. Only the right
+  // panel's width outlives the session — see defaultLeftWidth.
   setLeftWidth: (width) => {
     const s = get()
     const leftWidth = clampWidth(width, maxPanelWidth(s.rightOpen ? s.rightWidth : 0, s.viewport))
-    localStorage.setItem(LEFT_WIDTH_KEY, String(leftWidth))
     set({ leftWidth })
   },
 

@@ -271,15 +271,29 @@ can read and write the same vault.
   and restores them on mount; without it the graph reshuffles every time it is
   looked at. The simulation's centering forces are re-aimed on every resize
   too, since the panel's width can now change by a factor of four.
+- **Every session opens on the same view: the graph, at 70/30** (v0.16.2).
+  A cold launch sets `leftTab` to `graph` on desktop and phone alike, opens
+  the left panel at `defaultLeftWidth()` — three tenths of the window — and
+  starts the right panel *closed*, since an open one would make the split
+  30/50/20 rather than the 70/30 it is meant to be. `setMobile` resets to the
+  same shape when the breakpoint is crossed, so a resize lands where a launch
+  would. On a phone the drawer is full width instead: `.sidebar--graph` in
+  `app.css`'s `@media` block widens it to 100% while the graph is showing,
+  which is layout, and so the stylesheet's — see "Responsive layout" below.
+  This is the one place a *deliberate* first-run view beats remembering what
+  was there before, which is why the left width is not persisted at all.
 - **Either panel can be dragged to full width.** `maxPanelWidth` is one rule
   for both — whatever the window has left after the ribbon and the *other*
   panel, with nothing held back for the editor, which can be squeezed to
-  nothing on purpose. The width a panel is dragged to is what's stored;
-  `fittedWidth` is what's rendered, so a window later made too small holds the
-  panel in without losing what it was set to, and widening the window gives it
-  back. That needs the window's own width in the store (`uiStore.viewport`,
-  fed by App's resize listener) — a `window.innerWidth` read at render time
-  would not re-run.
+  nothing on purpose. `fittedWidth` is what's rendered, so a window later made
+  too small holds the panel in without losing what it was set to, and widening
+  the window gives it back. That needs the window's own width in the store
+  (`uiStore.viewport`, fed by App's resize listener) — a `window.innerWidth`
+  read at render time would not re-run. **Only the right panel's width
+  outlives the session** (`pitchstone:rightWidth`): the left one is derived
+  from the window on every launch by the rule above, so dragging it lasts the
+  session and no longer, and a double-click on its divider resets to that same
+  three tenths rather than to a fixed 300px.
 - **Responsive layout** has one breakpoint, 700px, and it is written down
   twice on purpose: `MOBILE_BREAKPOINT` in `uiStore` and the `@media` block at
   the end of `app.css`. Layout is the stylesheet's job — the shell's grid, the
@@ -500,8 +514,9 @@ Ask rather than guessing, and write the answer down here when you get it.
 - `src/store/` — `uiStore` (tabs, panel widths, theme, the mobile flag),
   `authStore`,
   `vaultStore` (notes, the open note, autosave, `linksVersion`). Panel widths
-  are the user's, stored per side; `maxPanelWidth`/`fittedWidth` are the one
-  rule that caps them — see Architecture.
+  are the user's — the right one stored, the left one re-derived from the
+  window each launch; `maxPanelWidth`/`fittedWidth` are the one rule that caps
+  them — see Architecture.
 - `src/components/` — the shell (`Ribbon`, `LeftSidebar`, `RightSidebar`,
   `EditorPane`, `StatusBar`, `LoginGate`), the panels (`FileTree`,
   `SearchPanel`, `TagsPanel`, `GraphView`), `SettingsModal`, `LinkCheckModal` (the
