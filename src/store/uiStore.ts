@@ -24,7 +24,7 @@ export const DEFAULT_RIGHT_WIDTH = 300
 
 /**
  * The left panel's width is deliberately *not* remembered. Every desktop
- * launch opens on the same view — the graph in three tenths of the window and
+ * launch opens on the same view — the graph in seven tenths of the window and
  * the editor in the rest — so the width is derived from the window rather than
  * read back from a previous session. Dragging it still works and still lasts
  * the session; it just doesn't carry into the next one.
@@ -32,7 +32,7 @@ export const DEFAULT_RIGHT_WIDTH = 300
  * The same number is what a double-click on the divider puts the panel back
  * to, so "reset" and "how it opened" mean the same thing.
  */
-const LEFT_PANEL_FRACTION = 0.3
+const LEFT_PANEL_FRACTION = 0.7
 
 export function defaultLeftWidth(viewport?: number): number {
   const width = viewport ?? (typeof window === 'undefined' ? 0 : window.innerWidth)
@@ -167,11 +167,12 @@ type UiState = {
 
 // A cold launch opens on the graph whatever the layout, because the whole
 // vault at a glance is the view worth starting from and a list of file names
-// is one tab away. On a desktop that is a 70/30: the graph in three tenths of
-// the window, the editor in the rest, and the right panel closed so the split
-// really is 70/30 rather than 30/50/20. On a phone the drawer takes the whole
-// screen instead — a drawer's width belongs to app.css, whose `.sidebar--graph`
-// rule already gives the graph the full width the other panels don't get.
+// is one tab away. On a desktop that is a 70/30 in the graph's favour: seven
+// tenths of the window for it, the editor in what is left, and the right panel
+// closed so the split really is 70/30 rather than 70/20/10. On a phone the
+// drawer takes the whole screen instead — a drawer's width belongs to app.css,
+// whose `.sidebar--graph` rule already gives the graph the full width the
+// other panels don't get.
 const startMobile = isMobileWidth()
 const startLeftTab: LeftTab = 'graph'
 const startLeftWidth = defaultLeftWidth()
@@ -191,7 +192,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   leftOpen: true,
   // Closed on both: on a phone the two panels are drawers over the same screen
   // so only one of them could start open anyway, and on a desktop an open right
-  // panel would make the launch view 30/50/20 rather than the 70/30 it is meant
+  // panel would make the launch view 70/20/10 rather than the 70/30 it is meant
   // to be. The ribbon opens it whenever it is wanted.
   rightOpen: false,
   leftWidth: startLeftWidth,

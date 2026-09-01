@@ -271,11 +271,12 @@ can read and write the same vault.
   and restores them on mount; without it the graph reshuffles every time it is
   looked at. The simulation's centering forces are re-aimed on every resize
   too, since the panel's width can now change by a factor of four.
-- **Every session opens on the same view: the graph, at 70/30** (v0.16.2).
-  A cold launch sets `leftTab` to `graph` on desktop and phone alike, opens
-  the left panel at `defaultLeftWidth()` — three tenths of the window — and
-  starts the right panel *closed*, since an open one would make the split
-  30/50/20 rather than the 70/30 it is meant to be. `setMobile` resets to the
+- **Every session opens on the same view: the graph, at 70/30** (v0.16.2,
+  the split corrected in favour of the graph in v0.16.3). A cold launch sets
+  `leftTab` to `graph` on desktop and phone alike, opens the left panel at
+  `defaultLeftWidth()` — *seven* tenths of the window, the graph being the
+  point of the view — and starts the right panel *closed*, since an open one
+  would make the split 70/20/10 rather than the 70/30 it is meant to be. `setMobile` resets to the
   same shape when the breakpoint is crossed, so a resize lands where a launch
   would. On a phone the drawer is full width instead: `.sidebar--graph` in
   `app.css`'s `@media` block widens it to 100% while the graph is showing,
@@ -293,7 +294,7 @@ can read and write the same vault.
   outlives the session** (`pitchstone:rightWidth`): the left one is derived
   from the window on every launch by the rule above, so dragging it lasts the
   session and no longer, and a double-click on its divider resets to that same
-  three tenths rather than to a fixed 300px.
+  seven tenths rather than to a fixed 300px.
 - **Responsive layout** has one breakpoint, 700px, and it is written down
   twice on purpose: `MOBILE_BREAKPOINT` in `uiStore` and the `@media` block at
   the end of `app.css`. Layout is the stylesheet's job — the shell's grid, the

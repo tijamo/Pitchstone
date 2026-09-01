@@ -14,7 +14,7 @@ export const changelog: ChangelogEntry[] = [
     ver: '0.16',
     title: 'Claude can connect without a personal token',
     items: [
-      'Pitchstone now opens on the graph every time, rather than on the file list: on a desktop it takes the left three tenths of the window with the editor in the rest, and on a phone the whole screen. The backlinks panel starts out of the way so the split really is 70/30 — the ribbon brings it back whenever you want it.',
+      'Pitchstone now opens on the graph every time, rather than on the file list: on a desktop it takes the left seven tenths of the window with the editor in the rest, and on a phone the whole screen. The backlinks panel starts out of the way so the split really is 70/30 — the ribbon brings it back whenever you want it.',
       'The MCP server now accepts sign-in through Tijamo’s own OAuth server as well as a personal token — useful for a connector, like Claude’s, that signs in on its own rather than being handed a token to paste in. Settings → Claude access and personal tokens themselves are unchanged; this is a second way in, not a replacement.',
       'A client that tries to connect without a token, or with one this vault does not recognise, is now pointed straight at where to get one, rather than just being told no.',
     ],
