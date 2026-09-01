@@ -1,6 +1,6 @@
 ---
 name: memory
-description: How to record and recall work in the Pitchstone vault — the per-project state note that orients a cold session, the individual dated decision notes and gotchas log beside it, and where cross-project patterns go. Use when writing down what happened or was decided, when opening a session on a project that may already have notes, and whenever reaching for the pitchstone tools to read or write memory.
+description: How to record and recall work in the Pitchstone vault — the per-project state note that orients a cold session, the individual decision notes and gotchas log beside it, and where cross-project patterns go. Use when writing down what happened or was decided, when opening a session on a project that may already have notes, and whenever reaching for the pitchstone tools to read or write memory.
 ---
 
 # Pitchstone as memory
@@ -16,8 +16,9 @@ Memory/
   Projects/
     <Project>/
       state.md            ← current truth. Rewritten in place. Read this first.
-      dcsn-YYYY-MM-DD-<slug>.md  ← one note per decision — what, and why
-      gotchas.md           ← things that bit us, and what the fix was
+      <slug>.md           ← one note per decision — what, and why. Dated in
+                            its own frontmatter, not in its name.
+      gotchas.md          ← things that bit us, and what the fix was
   Patterns/
     <topic>.md            ← what carries across projects, findable by topic
 ```
@@ -34,23 +35,42 @@ misses things. One note that is kept current does not.
 
 ## Decisions: one note per decision, not a shared log
 
-As of 2026-08-25, by Tim's direct order, a decision is its own note —
-`Memory/Projects/<Project>/dcsn-YYYY-MM-DD-<slug>.md` — not an entry appended
-to a shared `decisions.md`. This replaces the previous append-only-log
-convention.
+As of 2026-08-25, by Tim's direct order, a decision is its own note in the
+project's folder — not an entry appended to a shared `decisions.md`. This
+replaces the previous append-only-log convention.
 
-- **Path**: `Memory/Projects/<Project>/dcsn-YYYY-MM-DD-<slug>.md`. The date is
-  the day the decision was made — keep the original date when a decision is
-  later split, corrected, or superseded. `<slug>` is the decision's own name,
-  lowercase, hyphenated, no stop-word trimming needed — a few words that say
-  what it is (`dcsn-2026-08-25-decisions-become-individual-notes.md`).
-- **Title**: the note's own `# ` heading repeats the date and the decision in
-  one line (`# 2026-08-25 — Decisions become individual notes`), so the note
-  reads standalone — someone landing on it via search or a backlink should not
-  need the filename to know when it happened.
+**A note's name says what it is; its frontmatter says when it happened.**
+Since 2026-09-01, also by Tim's direct order, the date is *not* part of the
+filename and the `dcsn-` prefix is gone with it: a name is for identifying a
+note, and a date is a fact about it, which is what frontmatter is for.
+
+- **Path**: `Memory/Projects/<Project>/<slug>.md`. `<slug>` is the decision's
+  own name, lowercase, hyphenated, no stop-word trimming needed — a few words
+  that say what it is (`decisions-become-individual-notes.md`). Make it
+  distinctive rather than generic: titles resolve vault-wide, so a slug that
+  another project could plausibly use too makes both notes ambiguous to a
+  bare `[[wikilink]]`.
+- **Date**: a `date: YYYY-MM-DD` key in the note's frontmatter, above `tags`.
+  It is the day the decision was made — keep the original date when a decision
+  is later split, corrected, or superseded, exactly as the old dated filename
+  did.
+- **Title**: the note's own `# ` heading is the decision in one line
+  (`# Decisions become individual notes`) and carries no date — the
+  frontmatter above it already does.
 - **Body**: what was decided and why, including approaches rejected and the
   reason. Same content a `decisions.md` entry used to hold — this changes
   where it lives, not what it says.
+So a decision note opens like this:
+
+```markdown
+---
+date: 2026-08-25
+tags: [memory, pitchstone, decision]
+---
+
+# Decisions become individual notes
+```
+
 - **Tag every decision note `[memory, <project-slug>, decision]`** — the
   `decision` tag is what makes `list_tags`/`tag`-filtered `list_notes` able to
   pull every decision across every project in one query, which a shared
@@ -87,9 +107,9 @@ So:
 
 - When something becomes true, **rewrite `state.md`** — do not leave the old
   claim standing beside the new one.
-- When a decision is taken, **write a new `dcsn-YYYY-MM-DD-<slug>.md` note**
-  saying what was decided and why, including approaches rejected and the
-  reason — see above.
+- When a decision is taken, **write a new `<slug>.md` note** in the project's
+  folder, dated in its frontmatter, saying what was decided and why, including
+  approaches rejected and the reason — see above.
 - When something bites, append it to `gotchas.md` the moment it is learned,
   not at the end of the session. `gotchas.md` is unchanged by this: still one
   growing, append-only file, because a gotcha is usually short and reread as a
@@ -124,7 +144,8 @@ someone who remembers the day it was solved.
   `Memory/Projects/<Project>/state.md`; link to a project with
   `[[<Project>]]` and let the reader follow the folder. The same applies to
   decision notes now that there are many per project: link by full path
-  (`[[Memory/Projects/<Project>/dcsn-2026-08-25-...]]`), not by title alone.
+  (`[[Memory/Projects/<Project>/decisions-become-individual-notes]]`), not by
+  title alone.
 - **Link, don't repeat.** A daily entry says what happened and links out; the
   project's notes carry the settled version.
 

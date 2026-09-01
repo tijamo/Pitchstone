@@ -144,7 +144,8 @@ top level and the file tree doesn't fill up with machine minutes:
 ```
 Memory/
   Projects/<Project>/state.md              ← current truth, rewritten in place
-                    /dcsn-YYYY-MM-DD-<slug>.md  ← one note per decision
+                    /<slug>.md              ← one note per decision, dated in
+                                              its own frontmatter
                     /gotchas.md             ← things that bit us
   Patterns/<topic>.md                      ← what carries across projects
 ```
@@ -163,16 +164,33 @@ is reference.
 **Decisions are one note per decision, not a shared log.** Changed 2026-08-25,
 by Tim's direct order — retiring the single per-project `decisions.md` this
 same section used to describe, in favour of
-`Memory/Projects/<Project>/dcsn-YYYY-MM-DD-<slug>.md`, one per decision, tagged
-`decision`. The single-file shape was already the second attempt at this (it
-replaced a dated cross-project log on 2026-08-21, for the same "everything
-about this project" read-path reason `state.md` exists), and it had its own
-cost: nothing inside a growing shared log is individually linkable, and
-`write_note` has no partial-append, so recording one decision meant reading
-and rewriting every decision that came before it. See
-`Memory/Projects/Pitchstone/dcsn-2026-08-25-decisions-become-individual-notes.md`
-in the vault for the full record — including that it's a direct order, not an
-inferred preference.
+`Memory/Projects/<Project>/<slug>.md`, one per decision, tagged `decision`. The
+single-file shape was already the second attempt at this (it replaced a dated
+cross-project log on 2026-08-21, for the same "everything about this project"
+read-path reason `state.md` exists), and it had its own cost: nothing inside a
+growing shared log is individually linkable, and `write_note` has no
+partial-append, so recording one decision meant reading and rewriting every
+decision that came before it. See
+`Memory/Projects/Pitchstone/decisions-become-individual-notes.md` in the vault
+for the full record — including that it's a direct order, not an inferred
+preference.
+
+**A note's name says what it is; its frontmatter says when it happened.**
+Changed 2026-09-01, also by Tim's direct order: decision notes were named
+`dcsn-YYYY-MM-DD-<slug>.md`, and are now just `<slug>.md` with a
+`date: YYYY-MM-DD` key in their frontmatter above `tags`, and no date in the
+`# ` heading either. A name is for identifying a note — in a link, in a
+listing, in the graph — and a date is a fact *about* the note, which is what
+frontmatter is for; the prefix and the date between them meant every decision
+in a listing led with eleven characters that said nothing about which decision
+it was. The whole vault was migrated in the same change, with every reference
+and `[[wikilink]]` repointed. What the old name bought and this does not: the
+`dcsn-` prefix sorted and grouped decisions in a folder listing, so the
+`decision` tag and the new `date:` key are now the only way to pull them
+together — `list_notes` filtered by tag, not by reading filenames. One thing
+the slug now carries alone: it has to be distinctive enough not to collide,
+since titles resolve vault-wide and the date is no longer there to separate
+two decisions that would otherwise be named the same.
 
 **Logs record that a decision happened; `state.md` records what is true now.**
 That is the rule that stops old history from lying: a decision from three
@@ -199,8 +217,8 @@ Conventions that keep it usable:
   `[[wikilinks]]` resolve a title regardless of folder, and every project now
   has a note titled "state" — so `[[state]]` is ambiguous and
   `read_note("state")` is a coin toss. A bare project name is worse than
-  ambiguous: since project memory split into `state.md`/`dcsn-*.md`/
-  `gotchas.md`, no note is titled just "Pitchstone" or "Dodo" — that folder
+  ambiguous: since project memory split into `state.md`, `gotchas.md`, and a
+  note per decision, no note is titled just "Pitchstone" or "Dodo" — that folder
   isn't a note — so `[[Pitchstone]]` resolves to nothing and the link goes
   dead silently. Link to the specific note instead, e.g.
   `[[Memory/Projects/Pitchstone/state]]`.
