@@ -7,9 +7,13 @@ import { Mark } from './Mark'
  * Email and password, the same model Dodo uses — one form with a sign-in ⇄
  * create-account toggle, and no magic links. Everything past this gate needs a
  * session, because the vault is RLS-scoped.
+ *
+ * A third mode, 'reset', is the same card with the password field taken away:
+ * a forgotten password is answered by an email, and the link in it lands on
+ * Tijamo's shared identity site rather than here — see lib/identity.ts.
  */
 export function LoginGate({ children }: { children: ReactNode }) {
-  const { session, loading, mode, busy, error, init, setMode, submit } = useAuthStore()
+  const { session, loading, mode, busy, error, notice, init, setMode, submit } = useAuthStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
@@ -45,6 +49,7 @@ export function LoginGate({ children }: { children: ReactNode }) {
   if (session) return <>{children}</>
 
   const signingUp = mode === 'signup'
+  const resetting = mode === 'reset'
 
   return (
     <div className="gate">
@@ -60,9 +65,11 @@ export function LoginGate({ children }: { children: ReactNode }) {
           <h1 className="gate__title">Pitchstone</h1>
         </div>
         <p className="gate__sub">
-          {signingUp
-            ? 'Set a password to sync your vault across devices.'
-            : 'Sign in to open your vault.'}
+          {resetting
+            ? 'Enter the address you signed up with and we’ll send you a link to set a new password.'
+            : signingUp
+              ? 'Set a password to sync your vault across devices.'
+              : 'Sign in to open your vault.'}
         </p>
 
         <label className="gate__label" htmlFor="email">
@@ -80,39 +87,58 @@ export function LoginGate({ children }: { children: ReactNode }) {
           onChange={(e) => setEmail(e.target.value)}
         />
 
-        <label className="gate__label" htmlFor="password">
-          Password
-        </label>
-        <input
-          id="password"
-          className="gate__input"
-          type="password"
-          required
-          minLength={6}
-          autoComplete={signingUp ? 'new-password' : 'current-password'}
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        {!resetting && (
+          <>
+            <label className="gate__label" htmlFor="password">
+              Password
+            </label>
+            <input
+              id="password"
+              className="gate__input"
+              type="password"
+              required
+              minLength={6}
+              autoComplete={signingUp ? 'new-password' : 'current-password'}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </>
+        )}
 
         <button
           className="gate__button"
           type="submit"
-          disabled={busy || !email.trim() || !password}
+          disabled={busy || !email.trim() || (!resetting && !password)}
         >
-          {busy ? '…' : signingUp ? 'Create account' : 'Sign in'}
+          {busy
+            ? '…'
+            : resetting
+              ? 'Email me a link'
+              : signingUp
+                ? 'Create account'
+                : 'Sign in'}
         </button>
 
         <button
           className="gate__ghost"
           type="button"
-          onClick={() => setMode(signingUp ? 'signin' : 'signup')}
+          onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
         >
-          {signingUp
-            ? 'Already have an account? Sign in'
-            : 'First time? Create your account'}
+          {resetting
+            ? 'Back to sign in'
+            : signingUp
+              ? 'Already have an account? Sign in'
+              : 'First time? Create your account'}
         </button>
 
+        {mode === 'signin' && (
+          <button className="gate__ghost" type="button" onClick={() => setMode('reset')}>
+            Forgot your password?
+          </button>
+        )}
+
+        {notice && <p className="gate__notice">{notice}</p>}
         {error && <p className="gate__error">{error}</p>}
 
         <p className="gate__version">v{__APP_VERSION__}</p>

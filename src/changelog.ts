@@ -11,6 +11,14 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    ver: '0.17',
+    title: 'Forgotten passwords',
+    items: [
+      'A “Forgot your password?” link on the sign-in card. Give it the address you signed up with and a link to set a new password is emailed to you — Pitchstone says the same thing either way, so the form can’t be used to find out whether an address has an account.',
+      'The link opens Tijamo’s own sign-in page, which every Tijamo app shares, and it now knows to send you back here when you’re done. Setting a new password there sets it for every Tijamo app on the account, since they are all one account.',
+    ],
+  },
+  {
     ver: '0.16',
     title: 'Claude can connect without a personal token',
     items: [

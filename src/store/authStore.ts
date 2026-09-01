@@ -1,8 +1,14 @@
 import type { Session } from '@supabase/supabase-js'
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
+import { PASSWORD_RESET_REDIRECT } from '../lib/identity'
 
-export type AuthMode = 'signin' | 'signup'
+/**
+ * 'reset' is the same card with the password field taken away: an email
+ * address is all a reset needs, and sending someone to a separate page to
+ * type one they have already typed is a step for its own sake.
+ */
+export type AuthMode = 'signin' | 'signup' | 'reset'
 
 type AuthState = {
   session: Session | null
@@ -11,6 +17,9 @@ type AuthState = {
   mode: AuthMode
   busy: boolean
   error: string | null
+  /** Something that went right and needs saying — a reset email being sent
+   * is the only case, and it has no other way to show. */
+  notice: string | null
   init: () => () => void
   setMode: (mode: AuthMode) => void
   submit: (email: string, password: string) => Promise<void>
@@ -23,6 +32,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   mode: 'signin',
   busy: false,
   error: null,
+  notice: null,
 
   init: () => {
     if (!supabase) {
@@ -66,16 +76,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  setMode: (mode) => set({ mode, error: null }),
+  setMode: (mode) => set({ mode, error: null, notice: null }),
 
   submit: async (email, password) => {
     if (!supabase) return
     const sb = supabase
     const trimmed = email.trim()
-    if (!trimmed || !password) return
-
-    set({ busy: true, error: null })
     const mode = get().mode
+    if (!trimmed || (mode !== 'reset' && !password)) return
+
+    set({ busy: true, error: null, notice: null })
+
+    if (mode === 'reset') {
+      // The redirect names this app so the landing page can offer the way
+      // back; see lib/identity.ts for what happens if Supabase declines it.
+      const { error } = await sb.auth.resetPasswordForEmail(trimmed, {
+        redirectTo: PASSWORD_RESET_REDIRECT,
+      })
+      set({ busy: false })
+      if (error) {
+        set({ error: error.message })
+        return
+      }
+      // Deliberately says "if": answering differently for an address that has
+      // an account and one that doesn't turns this form into a way of asking
+      // whether somebody has one.
+      set({
+        notice: `If ${trimmed} has an account, a link to set a new password is on its way. It opens Tijamo's own sign-in page, which every Tijamo app shares — set a password there, then come back and sign in.`,
+      })
+      return
+    }
+
     const { data, error } =
       mode === 'signup'
         ? await sb.auth.signUp({ email: trimmed, password })

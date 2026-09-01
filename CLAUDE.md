@@ -231,7 +231,9 @@ can read and write the same vault.
   hardcode one.
 - **Auth:** email and password, the same model as Dodo — `signInWithPassword` /
   `signUp` behind one form with a sign-in ⇄ create-account toggle, no magic
-  links. Supabase's "Confirm email" is off, so signing up returns a session
+  links. A third mode of that same form, `reset` (v0.17), sends a
+  `resetPasswordForEmail` and says so — see "A forgotten password leaves the
+  app" below. Supabase's "Confirm email" is off, so signing up returns a session
   immediately. `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` come from the
   environment and are **not** committed, again matching Dodo; both are set as
   Netlify env vars for the deployed site.
@@ -302,6 +304,23 @@ can read and write the same vault.
   store's: which panels start open, that opening one drawer closes the other,
   and that opening a note puts the drawer away. `App` watches the media query
   and calls `setMobile`, so the two never disagree for longer than a frame.
+- **A forgotten password leaves the app, on purpose** (v0.17). The link in a
+  reset email *is* a session, and consuming it has to happen wherever Supabase
+  was told to send it — so the landing page belongs to Tijamo's shared
+  identity site (`identity.tijamo.app`, repo `tijamo/identity`), which every
+  app on this Supabase project shares, rather than being a route in here.
+  Pitchstone's whole side of it is `lib/identity.ts` plus a `reset` mode on
+  `LoginGate`: one `resetPasswordForEmail` with
+  `redirectTo=https://identity.tijamo.app/auth/confirm?app=pitchstone`, and a
+  notice that deliberately says "*if* that address has an account", since a
+  form that answers differently for an address that has one is a way of
+  asking whether somebody does. **`?app=pitchstone` is a hint, not a
+  redirect** — that page matches the id against its own list of apps and
+  never follows a URL from the query string. It needs
+  `https://identity.tijamo.app/**` in Supabase's Auth → URL Configuration →
+  Redirect URLs; without it GoTrue falls back to the project's Site URL,
+  which is that same site, so the cost is the "Back to Pitchstone" link and
+  nothing else.
 - **Link handling** deliberately splits in two so the app and the MCP server can
   never drift: *extraction* of `[[wikilinks]]` and `#tags` lives in one shared
   TypeScript module imported by both, while *resolution* (title →
@@ -447,6 +466,7 @@ minor bump.
 | 0.14 | ? | Vault import/export as a zip of `.md` files, previewed and undoable. |
 | 0.15 | ? | The graph draws nesting by default with wikilinks as a toggle; wikilinks are always coloured; a vault-wide link check that suggests and applies corrections. 0.15.1 moved the graph to the left panel, let either panel go full width, and made note labels fade sooner when zooming out. |
 | 0.16 | ? | The MCP server accepts an OAuth-issued token from Tijamo-hub's own OAuth 2.1 server (consent screen at `identity.tijamo.app`, a separate repo, `tijamo/identity`) alongside personal tokens — a client like Claude's can now sign in on its own instead of being handed a token to paste in. |
+| 0.17 | ? | Forgotten passwords: a reset link from the sign-in card, landing on Tijamo's shared identity site, which now knows to send you back here. |
 
 **A phase is not a version**, which is what made this confusing: phase 1 —
 "initial data and UI setup" — shipped as both 0.1 and 0.2, so the columns
@@ -522,7 +542,8 @@ Ask rather than guessing, and write the answer down here when you get it.
   `EditorPane`, `StatusBar`, `LoginGate`), the panels (`FileTree`,
   `SearchPanel`, `TagsPanel`, `GraphView`), `SettingsModal`, `LinkCheckModal` (the
   broken-link review), `LinkChoice` (the ambiguous-link popover), `Resizer`, `Icon`, and `Mark`.
-- `src/lib/` — the Supabase client, vault path helpers (`paths.ts`, unit
+- `src/lib/` — the Supabase client, `identity.ts` (where a reset email lands;
+  see Architecture), vault path helpers (`paths.ts`, unit
   tested), the note data access layer (`notes.ts`), personal tokens
   (`tokens.ts`), live updates (`live.ts`), zip import/export
   (`vaultTransfer.ts`), and `markdown/parse.ts` (shared extraction, unit

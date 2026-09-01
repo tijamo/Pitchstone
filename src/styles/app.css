@@ -439,6 +439,14 @@ button {
   color: var(--danger);
 }
 
+/* The counterpart to gate__error: a reset email having been sent is the one
+   thing this card has to report that went right. */
+.gate__notice {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
 /* ---------- Sidebar header ---------- */
 
 .sidebar__header {
