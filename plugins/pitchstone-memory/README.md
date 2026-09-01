@@ -59,10 +59,10 @@ server reads `plugin:pitchstone-memory:pitchstone … ✔ Connected`.
 ```
 Memory/
   Projects/<Project>/state.md       ← current truth, rewritten in place
-                    /decisions.md   ← append-only, dated
-                    /gotchas.md     ← things that bit us
+                    /<slug>.md      ← one note per decision, dated in its
+                                      own frontmatter, tagged `decision`
+                    /gotchas.md     ← things that bit us, appended to
   Patterns/<topic>.md               ← what carries across projects
-  Daily/YYYY-MM-DD.md               ← thin journal, optional
 ```
 
 `<Project>` is the git repository's directory name, so the hook can name the

@@ -130,24 +130,28 @@ someone who remembers the day it was solved.
   knows, and a second note saying the same thing is worse than none. Update the
   note that covers the subject rather than starting a near-duplicate — except
   a decision note, which is written once and left alone (see above).
-- **Append with `mode: "append"`** for `gotchas.md` and daily notes only.
-  Decision notes are written once with `write_note` and not appended to;
-  rewriting `gotchas.md` or a daily note loses everything already in it — a
-  daily note in particular may hold another project's entries from earlier the
-  same day.
+- **Append with `mode: "append"`** for `gotchas.md`, and nothing else.
+  `state.md` is rewritten in place, and a decision note is written once with
+  `write_note` and not appended to; rewriting `gotchas.md` loses everything
+  already in it. Note that a failed write is not proof nothing landed — see
+  the false-negative gotcha in
+  `Memory/Projects/Pitchstone/gotchas.md` before retrying an append.
 - **Tag every memory note `#memory`** plus a project tag (`#pitchstone`,
   `#dodo`), and decision notes additionally `#decision`. `list_tags` is how a
   cold session finds what is already there.
 - **Refer to these notes by full path, never by bare title.** Titles resolve
   vault-wide, so every project has a note titled "state" — `[[state]]` is
   ambiguous and `read_note("state")` is a coin toss. Read
-  `Memory/Projects/<Project>/state.md`; link to a project with
-  `[[<Project>]]` and let the reader follow the folder. The same applies to
+  `Memory/Projects/<Project>/state.md`, and **link to that note, not to the
+  project**: since project memory split into a folder, no note is titled just
+  "Pitchstone" or "Dodo" — a folder is not a note — so `[[Pitchstone]]`
+  resolves to nothing and the link dies silently, with only `vault_info`'s
+  "linked to but not written yet" line to show for it. The same applies to
   decision notes now that there are many per project: link by full path
   (`[[Memory/Projects/<Project>/decisions-become-individual-notes]]`), not by
   title alone.
-- **Link, don't repeat.** A daily entry says what happened and links out; the
-  project's notes carry the settled version.
+- **Link, don't repeat.** A decision note says what was decided and links to
+  what it supersedes; `state.md` carries the settled version.
 
 ## When to write
 

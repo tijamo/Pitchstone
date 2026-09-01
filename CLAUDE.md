@@ -222,8 +222,8 @@ Conventions that keep it usable:
   isn't a note — so `[[Pitchstone]]` resolves to nothing and the link goes
   dead silently. Link to the specific note instead, e.g.
   `[[Memory/Projects/Pitchstone/state]]`.
-- **Link, don't repeat.** A daily entry says what happened and links out; the
-  project's own notes carry the settled version.
+- **Link, don't repeat.** A decision note says what was decided and links to
+  what it supersedes; the project's `state.md` carries the settled version.
 
 ### At the start and end of a session
 
