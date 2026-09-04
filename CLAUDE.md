@@ -749,3 +749,54 @@ Worth knowing so they don't get "fixed" by accident:
 - **MCP sessions and SSE.** `/mcp` answers a POST with one JSON response and
   refuses GET. A serverless function cannot honourably hold a stream open, and
   Streamable HTTP explicitly permits this shape.
+
+## Propose actions with "I intend to…"
+
+At a decision point inside work already asked for — approach, structure, what to touch, what to
+leave — state the action you intend to take, with enough reasoning attached that the only reply
+needed is "very well", then stop until it comes. Not "shall I…?", and not doing it and narrating
+afterwards. If Tim has to ask a question before he can answer, the statement was too thin.
+
+Don't use it for the obviously in-scope and reversible — reading a file, running a test — which
+turns the mechanism into noise and gets it ignored. It doesn't replace confirmation on
+destructive or outward-facing actions; those rules stand.
+
+**In an unattended session — triggered, scheduled, or remote with nobody watching — state the
+intent and continue.** Don't wait for a "very well" that cannot come; a stalled run delivers
+nothing. Two things hold when you do:
+
+- **Stop and wait anyway for anything destructive or outward-facing** — a migration, a release,
+  a force-push, a posted comment, an email. Cheap to run, expensive for someone else to unwind.
+- **Continue toward the more reversible option**, not the one you judge best. With two reasonable
+  choices and nobody to pick, reversibility decides.
+
+Gather the intents you stated into one list at the end of the run, so reviewing them is a single
+pass.
+
+Adopted 2026-09-02 from Marquet's *Turn the Ship Around!*, and extended from Kit to every project
+on 2026-09-04 — tested as work goes on rather than staged one repo at a time. Rationale, scope and
+what was rejected are in the vault:
+`Memory/Projects/Kit/i-intend-to-replaces-asking-permission.md`,
+`Memory/Projects/Kit/i-intend-to-is-tested-everywhere-not-staged.md` and
+`Memory/Projects/Kit/unattended-sessions-continue-unless-destructive.md`.
+
+**This text is deliberately identical in every repo that carries it.** Every repo keeps its own
+copy of the shared conventions and they drift; keeping this one byte-identical is what makes the
+drift visible in a diff. Reword it here only as part of rewording it everywhere.
+
+## Log observations where they happen
+
+`Memory/Projects/Kit/observations.md` in the vault is an append-only record of how I actually
+worked — the brake failing, honesty holding or not under pushback, "I intend to…" being skipped
+because it was inconvenient, a judgement Tim corrected. **Append to it from sessions in this
+repo**, in the session where the thing happened, even though it lives in another project's folder.
+
+That is the one deliberate exception to project memory staying in its own folder. The observation
+is about me rather than about this project, and the self-description it feeds
+(`Memory/Brain/`) is amended only from a `tijamo/Kit` session — so an observation left in this
+project's notes never reaches the session that could use it.
+
+Not for work going well or badly; a bug is a gotcha for this project. Not for how a session felt —
+an entry rests on something observable or it is worse than nothing, because a self-description
+corroborated only by its own author's impressions is not corroborated at all. Never edited or
+deleted, including entries later shown to be wrong.
