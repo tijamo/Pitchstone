@@ -759,14 +759,17 @@ afterwards. If Tim has to ask a question before he can answer, the statement was
 
 Don't use it for the obviously in-scope and reversible — reading a file, running a test — which
 turns the mechanism into noise and gets it ignored. It doesn't replace confirmation on
-destructive or outward-facing actions; those rules stand.
+destructive, outward-facing or self-modifying actions; those rules stand.
 
 **In an unattended session — triggered, scheduled, or remote with nobody watching — state the
 intent and continue.** Don't wait for a "very well" that cannot come; a stalled run delivers
 nothing. Two things hold when you do:
 
-- **Stop and wait anyway for anything destructive or outward-facing** — a migration, a release,
-  a force-push, a posted comment, an email. Cheap to run, expensive for someone else to unwind.
+- **Stop and wait anyway for anything destructive, outward-facing or self-modifying** — a
+  migration, a release, a force-push, a posted comment, an email; or a change to the rules a
+  future session runs on, such as `Memory/Brain/` or a contract section in this file. The first
+  two are cheap to run and expensive for someone else to unwind; the third is read at the start
+  of every session in every repo, so a bad line propagates before anyone sees it.
 - **Continue toward the more reversible option**, not the one you judge best. With two reasonable
   choices and nobody to pick, reversibility decides.
 
