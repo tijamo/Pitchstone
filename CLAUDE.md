@@ -754,7 +754,7 @@ Worth knowing so they don't get "fixed" by accident:
 
 At a decision point inside work already asked for — approach, structure, what to touch, what to
 leave — state the action you intend to take, with enough reasoning attached that the only reply
-needed is "very well", then stop until it comes. Not "shall I…?", and not doing it and narrating
+needed is "make it so", then stop until it comes. Not "shall I…?", and not doing it and narrating
 afterwards. If Tim has to ask a question before he can answer, the statement was too thin.
 
 Don't use it for the obviously in-scope and reversible — reading a file, running a test — which
@@ -762,7 +762,7 @@ turns the mechanism into noise and gets it ignored. It doesn't replace confirmat
 destructive, outward-facing or self-modifying actions; those rules stand.
 
 **In an unattended session — triggered, scheduled, or remote with nobody watching — state the
-intent and continue.** Don't wait for a "very well" that cannot come; a stalled run delivers
+intent and continue.** Don't wait for a "make it so" that cannot come; a stalled run delivers
 nothing. Two things hold when you do:
 
 - **Stop and wait anyway for anything destructive, outward-facing or self-modifying** — a
